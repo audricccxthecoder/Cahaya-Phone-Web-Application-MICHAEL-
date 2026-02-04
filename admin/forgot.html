@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Forgot Password - Admin</title>
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body class="login-page">
+  <div class="login-container">
+    <div class="login-box">
+      <div class="login-header">
+        <h1>🔐 Forgot Password</h1>
+        <p>Masukkan username atau email admin untuk menerima instruksi reset.</p>
+      </div>
+
+      <div id="forgotAlert" class="alert"></div>
+
+      <form id="forgotForm">
+        <div class="form-group">
+          <label>Username atau Email</label>
+          <input type="text" id="usernameOrEmail" required autofocus />
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Kirim Link Reset</button>
+        </div>
+
+      </form>
+
+      <div style="margin-top:12px; text-align:center;"><a href="index.html">Kembali ke Login</a></div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+    document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertEl = document.getElementById('forgotAlert');
+      alertEl.className = 'alert';
+      const v = document.getElementById('usernameOrEmail').value.trim();
+      if (!v) return;
+      const res = await fetch(`${API_URL}/admin/forgot`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernameOrEmail: v }) });
+      const data = await res.json();
+      if (data.success) {
+        alertEl.textContent = data.message || 'Jika email terdaftar, link reset akan dikirim.';
+        alertEl.classList.add('success','show');
+        // If token returned (dev fallback), show it so admin can use it
+        if (data.token) {
+          const pre = document.createElement('pre');
+          pre.style.marginTop = '10px';
+          pre.textContent = 'Reset token (dev): ' + data.token + '\nUse this token at /admin/reset.html?token=' + data.token;
+          alertEl.appendChild(pre);
+        }
+      } else {
+        alertEl.textContent = data.message || 'Gagal membuat reset token.';
+        alertEl.classList.add('error','show');
+      }
+    });
+  </script>
+</body>
+</html>

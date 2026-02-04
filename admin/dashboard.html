@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Cahaya Phone CRM</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1>📊 Cahaya Phone Database</h1>
+            <div class="header-actions">
+                <span id="adminName" class="admin-name" title="Klik untuk ganti nama" style="cursor:pointer;"></span>
+                <button id="editAdminNameBtn" class="btn-small" title="Ubah nama">Edit</button>
+                <button onclick="logout()" class="btn-logout">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <a href="#" class="nav-item active" data-page="dashboard">Dashboard</a>
+        <a href="#" class="nav-item" data-page="customers">Customers</a>
+        <a href="#" class="nav-item" data-page="messages">Chat Log</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Dashboard Page -->
+        <div id="dashboardPage" class="page active">
+            <h2>Dashboard</h2>
+            
+            <!-- Statistics Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Total Customer</div>
+                        <div class="stat-value" id="totalCustomers">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">⭐</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Customer Baru</div>
+                        <div class="stat-value" id="newCustomers">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">📱</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Dari Instagram</div>
+                        <div class="stat-value" id="fromInstagram">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🌐</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Dari Website</div>
+                        <div class="stat-value" id="fromWebsite">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">📘</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Dari Facebook</div>
+                        <div class="stat-value" id="fromFacebook">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🎵</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Dari TikTok</div>
+                        <div class="stat-value" id="fromTikTok">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🤝</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Dari Teman/Keluarga</div>
+                        <div class="stat-value" id="fromFriends">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🔎</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Dari Lainnya</div>
+                        <div class="stat-value" id="fromOthers">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Customers -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Customer Terbaru</h3>
+                </div>
+                <div id="recentCustomers" class="card-body">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customers Page -->
+        <div id="customersPage" class="page">
+            <div class="page-header">
+                <h2>Daftar Customer</h2>
+                <div class="page-actions">
+                    <input type="text" id="searchCustomer" placeholder="Cari customer..." class="search-input">
+                    <select id="filterSource" class="filter-select">
+                        <option value="">Semua Source</option>
+                        <option value="Website">Website</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="Facebook">Facebook</option>
+                        <option value="TikTok">TikTok</option>
+                        <option value="Teman/Keluarga">Teman/Keluarga</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <div id="customersTable" class="card-body">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Page -->
+        <div id="messagesPage" class="page">
+            <h2>Log Chat WhatsApp</h2>
+
+            <div class="card">
+                <div id="messagesTable" class="card-body">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Customer Detail Modal -->
+    <div id="customerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Detail Customer</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="customerDetail" class="modal-body">
+                <!-- Will be filled by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Profile Modal -->
+    <div id="adminProfileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Admin Profile</h3>
+                <button class="modal-close" onclick="closeAdminModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="adminProfileForm">
+                    <div class="form-group">
+                        <label>Display Name</label>
+                        <input type="text" id="adminDisplayName" />
+                        <small class="muted">Hanya untuk mengubah nama tampilan; untuk mengganti username/password, isi field di bawah dan sertakan current password.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="adminUsername" />
+                    </div>
+                    <div class="form-group">
+                        <label>Current Password (required if changing username or password)</label>
+                        <input type="password" id="adminCurrentPassword" autocomplete="current-password" />
+                    </div>
+                    <div class="form-group">
+                        <label>New Password (leave blank to keep)</label>
+                        <input type="password" id="adminNewPassword" autocomplete="new-password" />
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Save Changes</button>
+                    </div>
+                </form>
+                <div id="adminProfileAlert" class="alert"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
