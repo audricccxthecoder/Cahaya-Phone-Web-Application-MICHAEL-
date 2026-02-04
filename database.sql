@@ -1,12 +1,14 @@
 -- ============================================
--- DATABASE SCHEMA - CAHAYA PHONE CRM
+-- RAILWAY DATABASE SETUP - CAHAYA PHONE CRM
+-- Run this in MySQL Workbench connected to Railway
 -- ============================================
 
-CREATE DATABASE IF NOT EXISTS cahaya_phone_crm;
-USE cahaya_phone_crm;
+-- Use the Railway default database name
+-- Note: Railway usually creates database named 'railway'
+-- If your database name is different, change it below
 
 -- ============================================
--- TABEL ADMIN
+-- TABEL ADMINS
 -- ============================================
 CREATE TABLE IF NOT EXISTS admins (
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -20,7 +22,7 @@ CREATE TABLE IF NOT EXISTS admins (
 -- Insert default admin
 -- Username: admin
 -- Password: admin123
-INSERT INTO admins (username, password, nama, email) VALUES 
+INSERT IGNORE INTO admins (username, password, nama, email) VALUES 
 ('admin', '$2a$10$i4H32RnI3kzLIDrZSYYEVOMRKzUcAydkLpAm4X.2KvT5aZL.qeU9u', 'Administrator', 'admin@localhost');
 
 -- Table to store admin reset tokens
@@ -74,35 +76,6 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 -- ============================================
--- DATA CONTOH (OPTIONAL - UNTUK TESTING)
--- ============================================
-
--- Contoh customer dari Website
-INSERT INTO customers (
-    nama_lengkap, nama_sales, merk_unit, tipe_unit, harga, qty, 
-    tanggal_lahir, alamat, whatsapp, metode_pembayaran, tahu_dari, source, status
-) VALUES 
-(
-    'Budi Santoso', 'Sales A', 'iPhone', '15 Pro Max', 18000000, 1,
-    '1990-05-15', 'Jl. Sudirman No. 123, Jakarta', '081234567890',
-    'Cash', 'Website', 'Website', 'New'
-);
-
--- Contoh customer dari Instagram
-INSERT INTO customers (
-    nama_lengkap, whatsapp, source, status
-) VALUES 
-(
-    'Siti Nurhaliza', '081298765432', 'Instagram', 'New'
-);
-
--- Contoh messages
-INSERT INTO messages (customer_id, direction, message) VALUES
-(1, 'out', 'Halo Budi Santoso, terima kasih sudah menghubungi Cahaya Phone. Tim sales Sales A akan segera menghubungi Anda.'),
-(2, 'in', 'Halo saya dari Instagram'),
-(2, 'out', 'Halo Siti Nurhaliza, terima kasih sudah menghubungi Cahaya Phone. Tim kami akan segera menghubungi Anda.');
-
--- ============================================
 -- VIEW UNTUK STATISTIK
 -- ============================================
 CREATE OR REPLACE VIEW customer_stats AS
@@ -116,6 +89,15 @@ SELECT
     SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as new_customers,
     SUM(CASE WHEN status = 'Old' THEN 1 ELSE 0 END) as old_customers,
     SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today_customers,
-    -- Exclude known sources AND Teman/Keluarga so 'Lainnya' only counts truly other values
     SUM(CASE WHEN source NOT IN ('Website','Instagram','Facebook','TikTok','Teman/Keluarga') THEN 1 ELSE 0 END) as from_others
 FROM customers;
+
+-- ============================================
+-- VERIFY TABLES CREATED
+-- ============================================
+SHOW TABLES;
+
+-- ============================================
+-- VERIFY ADMIN ACCOUNT
+-- ============================================
+SELECT id, username, nama, email FROM admins;
