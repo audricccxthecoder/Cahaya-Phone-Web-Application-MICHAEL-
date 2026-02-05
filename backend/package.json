@@ -1,19 +1,23 @@
 {
-  "name": "backend",
+  "name": "cahaya-phone-crm",
   "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
+  "description": "WhatsApp CRM System with Customer Management and Admin Dashboard",
+  "engines": {
+    "node": "18.x",
+    "npm": "9.x"
   },
-  "dependencies": {
-    "axios": "^1.13.4",
-    "bcryptjs": "^2.4.3",
-    "body-parser": "^2.2.2",
-    "cors": "^2.8.6",
-    "dotenv": "^17.2.3",
-    "express": "^4.22.1",
-    "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.16.2",
-    "nodemailer": "^6.9.4"
-  }
+  "scripts": {
+    "migrate": "cd backend && node migrate.js",
+    "start": "cd backend && node server.js",
+    "postinstall": "cd backend && npm install",
+    "dev": "cd backend && node server.js"
+  },
+  "keywords": [
+    "crm",
+    "whatsapp",
+    "customer-management",
+    "webhook"
+  ],
+  "author": "Cahaya Phone",
+  "license": "MIT"
 }
