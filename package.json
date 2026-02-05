@@ -7,6 +7,7 @@
     "npm": "9.x"
   },
   "scripts": {
+    "migrate": "cd backend && node migrate.js",
     "start": "cd backend && node server.js",
     "postinstall": "cd backend && npm install"
   },
