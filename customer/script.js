@@ -23,34 +23,32 @@ function showAlert(message, type = 'success') {
     alert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// Format WhatsApp number
+/**
+ * Normalize phone number to WhatsApp format (628xxx)
+ * Handles: "0812 3456 7890", "+62-812-3456-7890", "62812...", "812..."
+ */
 function formatWhatsApp(number) {
-    // Remove all non-digits
-    let cleaned = number.replace(/\D/g, '');
-    
-    // Convert 08xxx to 628xxx
-    if (cleaned.startsWith('0')) {
-        cleaned = '62' + cleaned.substring(1);
-    }
-    
-    return cleaned;
+    // Remove all non-digit characters
+    let num = String(number).replace(/\D/g, '');
+
+    if (num.startsWith('62')) return num;
+    if (num.startsWith('0'))  return '62' + num.slice(1);
+    if (num.startsWith('8') && num.length >= 9) return '62' + num;
+    return num;
 }
 
-// Validate form
 function validateForm(formData) {
-    // Validate required fields
     if (!formData.nama_lengkap || !formData.whatsapp) {
         showAlert('Nama lengkap dan WhatsApp wajib diisi', 'error');
         return false;
     }
-    
-    // Validate WhatsApp format
-    const whatsapp = formData.whatsapp.replace(/\D/g, '');
-    if (whatsapp.length < 10 || whatsapp.length > 15) {
-        showAlert('Nomor WhatsApp tidak valid', 'error');
+
+    const normalized = formatWhatsApp(formData.whatsapp);
+    if (!normalized.startsWith('62') || normalized.length < 11 || normalized.length > 15) {
+        showAlert('Nomor WhatsApp tidak valid. Contoh: 08123456789 atau +62812345678', 'error');
         return false;
     }
-    
+
     return true;
 }
 
@@ -124,16 +122,10 @@ form.addEventListener('submit', async (e) => {
     }
 });
 
-// Auto-format WhatsApp input
-document.getElementById('whatsapp').addEventListener('input', (e) => {
-    let value = e.target.value.replace(/\D/g, '');
-    
-    // Limit length
-    if (value.length > 13) {
-        value = value.substring(0, 13);
-    }
-    
-    e.target.value = value;
+// Auto-format WhatsApp input — allow spaces/dashes while typing, normalize on blur
+document.getElementById('whatsapp').addEventListener('blur', (e) => {
+    const normalized = formatWhatsApp(e.target.value);
+    if (normalized) e.target.value = normalized;
 });
 
 // Auto-format price input

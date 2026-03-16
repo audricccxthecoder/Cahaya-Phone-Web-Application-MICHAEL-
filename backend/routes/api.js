@@ -56,4 +56,14 @@ router.get('/admin/customers/:id', authMiddleware, adminController.getCustomerBy
 router.get('/admin/messages', authMiddleware, adminController.getMessages);
 router.get('/admin/messages/:customerId', authMiddleware, adminController.getMessagesByCustomer);
 
+// Export contacts (CSV)
+router.get('/admin/customers/export', authMiddleware, adminController.exportContacts);
+
+// Broadcast
+router.post('/admin/broadcast/start', authMiddleware, adminController.startBroadcast);
+router.post('/admin/broadcast/stop', authMiddleware, adminController.stopBroadcast);
+router.post('/admin/broadcast/pause', authMiddleware, adminController.pauseBroadcast);
+router.post('/admin/broadcast/resume', authMiddleware, adminController.resumeBroadcast);
+router.get('/admin/broadcast/status', authMiddleware, adminController.getBroadcastStatus);
+
 module.exports = router;

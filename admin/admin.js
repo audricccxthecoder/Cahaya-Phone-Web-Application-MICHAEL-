@@ -1122,6 +1122,135 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     }
 
     // ============================================
+    // EXPORT CONTACTS
+    // ============================================
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = `${API_URL}/admin/customers/export`;
+        // Pass token via URL not possible for download links — use fetch instead
+        fetch(`${API_URL}/admin/customers/export`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(res => res.blob())
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const today = new Date().toISOString().slice(0, 10);
+            link.href = url;
+            link.download = `customers_${today}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
+        })
+        .catch(() => alert('Gagal export. Pastikan koneksi ke server OK.'));
+    });
+
+    // ============================================
+    // BROADCAST
+    // ============================================
+
+    const broadcastStartBtn = document.getElementById('broadcastStartBtn');
+    const broadcastPauseBtn = document.getElementById('broadcastPauseBtn');
+    const broadcastResumeBtn = document.getElementById('broadcastResumeBtn');
+    const broadcastStopBtn  = document.getElementById('broadcastStopBtn');
+    const broadcastStatusEl = document.getElementById('broadcastStatus');
+
+    function renderBroadcastStatus(status) {
+        if (!status) {
+            broadcastStatusEl.innerHTML = '<p class="muted">Belum ada broadcast aktif.</p>';
+            return;
+        }
+        const progressPct = status.total > 0 ? Math.round(((status.sent + status.failed) / status.total) * 100) : 0;
+        const logHtml = (status.log || []).slice(-20).reverse().map(entry => {
+            if (entry.info) return `<div class="muted" style="font-size:12px;">${entry.info}</div>`;
+            const icon = entry.success ? '✅' : '❌';
+            return `<div style="font-size:12px;">${icon} ${entry.name || entry.phone} — ${entry.success ? 'Terkirim' : 'Gagal: ' + (entry.error || '')}</div>`;
+        }).join('');
+
+        broadcastStatusEl.innerHTML = `
+            <div style="margin-bottom:12px;">
+                <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:8px;">
+                    <span><strong>Status:</strong> ${status.running ? (status.paused ? '⏸ Dijeda' : '▶ Berjalan') : '⏹ Selesai/Berhenti'}</span>
+                    <span><strong>Total:</strong> ${status.total}</span>
+                    <span><strong>Terkirim:</strong> <span style="color:green">${status.sent}</span></span>
+                    <span><strong>Gagal:</strong> <span style="color:red">${status.failed}</span></span>
+                    <span><strong>Antrian:</strong> ${status.queued}</span>
+                </div>
+                <div style="background:#eee;border-radius:4px;height:8px;">
+                    <div style="background:#27ae60;width:${progressPct}%;height:8px;border-radius:4px;transition:width 0.3s;"></div>
+                </div>
+                <small class="muted">${progressPct}% selesai</small>
+            </div>
+            <div style="max-height:200px;overflow-y:auto;border:1px solid #eee;padding:8px;border-radius:4px;">
+                ${logHtml || '<span class="muted">Log kosong</span>'}
+            </div>
+        `;
+
+        // Update button states
+        broadcastStartBtn.disabled = status.running && !status.paused;
+        broadcastPauseBtn.disabled = !status.running || status.paused;
+        broadcastResumeBtn.disabled = !status.paused;
+        broadcastStopBtn.disabled = !status.running && status.queued === 0;
+    }
+
+    broadcastStartBtn.addEventListener('click', async () => {
+        const message = document.getElementById('broadcastMessage').value.trim();
+        const source = document.getElementById('broadcastSource').value;
+        if (!message) {
+            alert('Pesan broadcast tidak boleh kosong!');
+            return;
+        }
+        if (!confirm(`Yakin mau kirim broadcast ke semua customer opted-in${source ? ' dari ' + source : ''}?\n\nPesan:\n${message}`)) return;
+
+        broadcastStartBtn.disabled = true;
+        broadcastStartBtn.textContent = 'Memulai...';
+
+        const body = { message };
+        if (source) body.source_filter = source;
+
+        const res = await apiCall('/admin/broadcast/start', { method: 'POST', body: JSON.stringify(body) });
+        broadcastStartBtn.textContent = '▶ Mulai Broadcast';
+
+        if (res && res.success) {
+            renderBroadcastStatus(res.status);
+            broadcastPauseBtn.disabled = false;
+            broadcastStopBtn.disabled = false;
+            // Auto-refresh status every 4 seconds while running
+            const interval = setInterval(async () => {
+                const s = await apiCall('/admin/broadcast/status');
+                if (s && s.status) {
+                    renderBroadcastStatus(s.status);
+                    if (!s.status.running) clearInterval(interval);
+                }
+            }, 4000);
+        } else {
+            alert('Gagal memulai broadcast: ' + (res?.message || 'Unknown error'));
+            broadcastStartBtn.disabled = false;
+        }
+    });
+
+    broadcastPauseBtn.addEventListener('click', async () => {
+        const res = await apiCall('/admin/broadcast/pause', { method: 'POST', body: '{}' });
+        if (res) renderBroadcastStatus(res.status);
+    });
+
+    broadcastResumeBtn.addEventListener('click', async () => {
+        const res = await apiCall('/admin/broadcast/resume', { method: 'POST', body: '{}' });
+        if (res) renderBroadcastStatus(res.status);
+    });
+
+    broadcastStopBtn.addEventListener('click', async () => {
+        if (!confirm('Yakin mau menghentikan broadcast?')) return;
+        const res = await apiCall('/admin/broadcast/stop', { method: 'POST', body: '{}' });
+        if (res) renderBroadcastStatus(res.status);
+    });
+
+    document.getElementById('refreshStatusBtn').addEventListener('click', async () => {
+        const res = await apiCall('/admin/broadcast/status');
+        if (res) renderBroadcastStatus(res.status);
+    });
+
+    // ============================================
     // INITIAL LOAD
     // ============================================
 

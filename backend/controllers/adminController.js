@@ -6,6 +6,8 @@
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const whatsappService = require('../config/whatsapp');
+const { sanitizePhone } = require('../utils/phoneUtils');
 
 /**
  * Login admin
@@ -399,6 +401,148 @@ exports.validateResetToken = async (req, res) => {
         console.error('❌ Validate token error:', error);
         res.status(500).json({ success: false, message: 'Gagal validasi token' });
     }
+};
+
+/**
+ * Export all customers as CSV
+ * GET /api/admin/customers/export
+ */
+exports.exportContacts = async (req, res) => {
+    try {
+        const { rows: customers } = await db.query(
+            `SELECT nama_lengkap, whatsapp, nama_sales, merk_unit, tipe_unit,
+                    source, status, created_at
+             FROM customers ORDER BY created_at DESC`
+        );
+
+        // Build CSV
+        const header = 'Nama,Nomor WhatsApp,Sales,Merk,Tipe,Source,Status,Tanggal Daftar\n';
+        const rows = customers.map(c => {
+            const phone = sanitizePhone(c.whatsapp);
+            const date = new Date(c.created_at).toLocaleDateString('id-ID');
+            // Escape fields that might contain commas
+            const esc = v => `"${String(v || '').replace(/"/g, '""')}"`;
+            return [
+                esc(c.nama_lengkap),
+                esc(phone),
+                esc(c.nama_sales || ''),
+                esc(c.merk_unit || ''),
+                esc(c.tipe_unit || ''),
+                esc(c.source),
+                esc(c.status),
+                esc(date)
+            ].join(',');
+        }).join('\n');
+
+        const csv = header + rows;
+        const filename = `customers_${new Date().toISOString().slice(0,10)}.csv`;
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        // BOM for Excel compatibility
+        res.send('\uFEFF' + csv);
+
+    } catch (error) {
+        console.error('❌ Export contacts error:', error);
+        res.status(500).json({ success: false, message: 'Gagal export data' });
+    }
+};
+
+/**
+ * Start broadcast
+ * POST /api/admin/broadcast/start
+ * Body: { message, source_filter? }
+ */
+exports.startBroadcast = async (req, res) => {
+    try {
+        const { message, source_filter } = req.body;
+
+        if (!message || String(message).trim() === '') {
+            return res.status(400).json({ success: false, message: 'Pesan broadcast tidak boleh kosong' });
+        }
+
+        // Check if broadcast already running
+        const currentStatus = whatsappService.getBroadcastStatus();
+        if (currentStatus.running && !currentStatus.paused) {
+            return res.status(409).json({
+                success: false,
+                message: 'Broadcast sedang berjalan. Stop dulu sebelum memulai baru.',
+                status: currentStatus
+            });
+        }
+
+        // Get opted-in customers
+        let query = `SELECT id, nama_lengkap, whatsapp FROM customers WHERE opted_in = TRUE`;
+        const params = [];
+        if (source_filter) {
+            query += ` AND source = $1`;
+            params.push(source_filter);
+        }
+        query += ` ORDER BY created_at ASC`;
+
+        const { rows: customers } = await db.query(query, params);
+
+        if (customers.length === 0) {
+            return res.status(400).json({ success: false, message: 'Tidak ada customer opted-in untuk dibroadcast' });
+        }
+
+        // Log message delivery to DB
+        const onLog = async (customerId, msg, deliveryStatus) => {
+            const direction = deliveryStatus === 'sent' ? 'out' : 'out';
+            await db.query(
+                `INSERT INTO messages (customer_id, direction, message) VALUES ($1, $2, $3)`,
+                [customerId, direction, `[BROADCAST][${deliveryStatus.toUpperCase()}] ${msg}`]
+            );
+        };
+
+        const status = whatsappService.startBroadcast(customers, message, onLog);
+
+        res.json({
+            success: true,
+            message: `Broadcast dimulai untuk ${customers.length} customer`,
+            status
+        });
+
+    } catch (error) {
+        console.error('❌ Start broadcast error:', error);
+        res.status(500).json({ success: false, message: 'Gagal memulai broadcast' });
+    }
+};
+
+/**
+ * Stop broadcast
+ * POST /api/admin/broadcast/stop
+ */
+exports.stopBroadcast = async (req, res) => {
+    const status = whatsappService.stopBroadcast();
+    res.json({ success: true, message: 'Broadcast dihentikan', status });
+};
+
+/**
+ * Pause broadcast
+ * POST /api/admin/broadcast/pause
+ */
+exports.pauseBroadcast = async (req, res) => {
+    const status = whatsappService.pauseBroadcast();
+    res.json({ success: true, message: 'Broadcast dijeda', status });
+};
+
+/**
+ * Resume broadcast
+ * POST /api/admin/broadcast/resume
+ */
+exports.resumeBroadcast = async (req, res) => {
+    const status = whatsappService.resumeBroadcast();
+    res.json({ success: true, message: 'Broadcast dilanjutkan', status });
+};
+
+/**
+ * Get broadcast status
+ * GET /api/admin/broadcast/status
+ */
+exports.getBroadcastStatus = async (req, res) => {
+    const status = whatsappService.getBroadcastStatus();
+    res.json({ success: true, status });
 };
 
 /**

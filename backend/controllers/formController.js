@@ -5,6 +5,7 @@
 
 const db = require('../config/database');
 const whatsappService = require('../config/whatsapp');
+const { sanitizePhone, validatePhone } = require('../utils/phoneUtils');
 
 /**
  * Submit customer form
@@ -27,7 +28,12 @@ exports.submitForm = async (req, res) => {
             });
         }
 
-        const cleanPhone = whatsapp.replace(/\D/g, '');
+        // Sanitize & validate phone number (backend validation)
+        const cleanPhone = sanitizePhone(whatsapp);
+        const phoneCheck = validatePhone(cleanPhone);
+        if (!phoneCheck.valid) {
+            return res.status(400).json({ success: false, message: phoneCheck.message });
+        }
 
         const extra = [];
         if (kota) extra.push(`Kota: ${kota}`);

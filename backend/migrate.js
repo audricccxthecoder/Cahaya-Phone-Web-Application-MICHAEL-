@@ -59,6 +59,7 @@ async function migrate() {
         tahu_dari VARCHAR(50),
         source VARCHAR(20) NOT NULL DEFAULT 'Unknown',
         status VARCHAR(20) DEFAULT 'New',
+        opted_in BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
