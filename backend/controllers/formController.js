@@ -1,6 +1,6 @@
-    // ============================================
+// ============================================
 // FORM CONTROLLER
-// Handle customer form submissions```
+// Handle customer form submissions
 // ============================================
 
 const db = require('../config/database');
