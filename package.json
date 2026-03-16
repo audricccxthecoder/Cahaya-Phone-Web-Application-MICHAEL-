@@ -9,7 +9,8 @@
   "scripts": {
     "migrate": "cd backend && node migrate.js",
     "start": "cd backend && node server.js",
-    "postinstall": "cd backend && npm install"
+    "postinstall": "cd backend && npm install",
+    "dev": "cd backend && node server.js"
   },
   "keywords": [
     "crm",

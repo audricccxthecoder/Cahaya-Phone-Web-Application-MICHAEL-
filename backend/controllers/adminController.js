@@ -17,9 +17,8 @@ exports.login = async (req, res) => {
 
         console.log('🔐 Login attempt:', username);
 
-        // Cari admin
-        const [admins] = await db.query(
-            'SELECT * FROM admins WHERE username = ?',
+        const { rows: admins } = await db.query(
+            'SELECT * FROM admins WHERE username = $1',
             [username]
         );
 
@@ -32,7 +31,6 @@ exports.login = async (req, res) => {
 
         const admin = admins[0];
 
-        // Verify password
         const isValid = await bcrypt.compare(password, admin.password);
 
         if (!isValid) {
@@ -42,7 +40,6 @@ exports.login = async (req, res) => {
             });
         }
 
-        // Generate JWT token
         const token = jwt.sign(
             { id: admin.id, username: admin.username },
             process.env.JWT_SECRET,
@@ -77,12 +74,11 @@ exports.login = async (req, res) => {
  */
 exports.getStats = async (req, res) => {
     try {
-        // Get statistics dari view
-        const [stats] = await db.query('SELECT * FROM customer_stats');
+        const { rows } = await db.query('SELECT * FROM customer_stats');
 
         res.json({
             success: true,
-            data: stats[0]
+            data: rows[0]
         });
 
     } catch (error) {
@@ -100,12 +96,12 @@ exports.getStats = async (req, res) => {
  */
 exports.getCustomers = async (req, res) => {
     try {
-        const [customers] = await db.query(
-            `SELECT 
+        const { rows: customers } = await db.query(
+            `SELECT
                 id, nama_lengkap, nama_sales, merk_unit, tipe_unit,
                 harga, qty, whatsapp, metode_pembayaran,
                 source, status, created_at
-            FROM customers 
+            FROM customers
             ORDER BY created_at DESC`
         );
 
@@ -131,8 +127,8 @@ exports.getCustomerById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const [customers] = await db.query(
-            'SELECT * FROM customers WHERE id = ?',
+        const { rows: customers } = await db.query(
+            'SELECT * FROM customers WHERE id = $1',
             [id]
         );
 
@@ -163,8 +159,8 @@ exports.getCustomerById = async (req, res) => {
  */
 exports.getMessages = async (req, res) => {
     try {
-        const [messages] = await db.query(
-            `SELECT 
+        const { rows: messages } = await db.query(
+            `SELECT
                 m.id, m.customer_id, m.direction, m.message, m.sent_at,
                 c.nama_lengkap, c.whatsapp
             FROM messages m
@@ -197,7 +193,7 @@ exports.debugAdmins = async (req, res) => {
     }
 
     try {
-        const [rows] = await db.query('SELECT id, username, nama FROM admins');
+        const { rows } = await db.query('SELECT id, username, nama FROM admins');
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('❌ Debug admins error:', error);
@@ -222,7 +218,7 @@ exports.updateProfile = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nama tidak boleh kosong' });
         }
 
-        await db.query('UPDATE admins SET nama = ? WHERE id = ?', [String(nama).trim(), adminId]);
+        await db.query('UPDATE admins SET nama = $1 WHERE id = $2', [String(nama).trim(), adminId]);
 
         res.json({ success: true, message: 'Profil diperbarui', data: { id: adminId, nama: String(nama).trim() } });
     } catch (error) {
@@ -243,48 +239,51 @@ exports.changeCredentials = async (req, res) => {
         if (!adminId) return res.status(401).json({ success: false, message: 'Unauthorized' });
         if (!current_password) return res.status(400).json({ success: false, message: 'Current password is required' });
 
-        // Fetch current admin
-        const [rows] = await db.query('SELECT * FROM admins WHERE id = ?', [adminId]);
+        const { rows } = await db.query('SELECT * FROM admins WHERE id = $1', [adminId]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Admin not found' });
 
         const admin = rows[0];
-        const isValid = await require('bcryptjs').compare(current_password, admin.password);
+        const isValid = await bcrypt.compare(current_password, admin.password);
         if (!isValid) return res.status(401).json({ success: false, message: 'Current password is incorrect' });
 
         const updates = [];
         const params = [];
+        let paramCount = 1;
 
-        // Update username if provided and different
         if (new_username && String(new_username).trim() !== admin.username) {
-            // Check uniqueness
-            const [u] = await db.query('SELECT id FROM admins WHERE username = ? AND id != ?', [String(new_username).trim(), adminId]);
+            const { rows: u } = await db.query('SELECT id FROM admins WHERE username = $1 AND id != $2', [String(new_username).trim(), adminId]);
             if (u.length > 0) return res.status(409).json({ success: false, message: 'Username already taken' });
-            updates.push('username = ?'); params.push(String(new_username).trim());
+            updates.push(`username = $${paramCount++}`); params.push(String(new_username).trim());
         }
 
-        // Update name if provided
         if (nama && String(nama).trim() !== admin.nama) {
-            updates.push('nama = ?'); params.push(String(nama).trim());
+            updates.push(`nama = $${paramCount++}`); params.push(String(nama).trim());
         }
 
-        // Update password if provided
         let passwordChanged = false;
         if (new_password) {
             if (String(new_password).length < 6) return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
-            const hashed = await require('bcryptjs').hash(new_password, 10);
-            updates.push('password = ?'); params.push(hashed);
+            const hashed = await bcrypt.hash(new_password, 10);
+            updates.push(`password = $${paramCount++}`); params.push(hashed);
             passwordChanged = true;
         }
 
         if (updates.length > 0) {
             params.push(adminId);
-            await db.query(`UPDATE admins SET ${updates.join(', ')} WHERE id = ?`, params);
+            await db.query(`UPDATE admins SET ${updates.join(', ')} WHERE id = $${paramCount}`, params);
         }
 
-        // Generate new token so client can continue without forcing logout
-        const token = require('jsonwebtoken').sign({ id: adminId, username: new_username ? String(new_username).trim() : admin.username }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        const token = jwt.sign(
+            { id: adminId, username: new_username ? String(new_username).trim() : admin.username },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
 
-        const responseData = { id: adminId, username: new_username ? String(new_username).trim() : admin.username, nama: nama ? String(nama).trim() : admin.nama };
+        const responseData = {
+            id: adminId,
+            username: new_username ? String(new_username).trim() : admin.username,
+            nama: nama ? String(nama).trim() : admin.nama
+        };
 
         res.json({ success: true, message: 'Credentials updated', token, data: responseData });
 
@@ -302,9 +301,9 @@ exports.getMessagesByCustomer = async (req, res) => {
     try {
         const { customerId } = req.params;
 
-        const [messages] = await db.query(
-            `SELECT * FROM messages 
-            WHERE customer_id = ? 
+        const { rows: messages } = await db.query(
+            `SELECT * FROM messages
+            WHERE customer_id = $1
             ORDER BY sent_at ASC`,
             [customerId]
         );
@@ -325,36 +324,35 @@ exports.getMessagesByCustomer = async (req, res) => {
 
 /**
  * POST /api/admin/forgot
- * Body: { usernameOrEmail }
  */
 exports.forgotPassword = async (req, res) => {
     try {
         const { usernameOrEmail } = req.body;
         if (!usernameOrEmail) return res.status(400).json({ success: false, message: 'username or email is required' });
 
-        // Find admin by username or email
-        const [rows] = await db.query('SELECT id, username, email, nama FROM admins WHERE username = ? OR email = ?', [usernameOrEmail, usernameOrEmail]);
+        const { rows } = await db.query(
+            'SELECT id, username, email, nama FROM admins WHERE username = $1 OR email = $2',
+            [usernameOrEmail, usernameOrEmail]
+        );
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Admin not found' });
         const admin = rows[0];
 
-        // Generate token
         const crypto = require('crypto');
         const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + (60 * 60 * 1000)); // 1 hour
+        const expiresAt = new Date(Date.now() + (60 * 60 * 1000));
 
-        await db.query('INSERT INTO admin_reset_tokens (admin_id, token, expires_at) VALUES (?, ?, ?)', [admin.id, token, expiresAt]);
+        await db.query(
+            'INSERT INTO admin_reset_tokens (admin_id, token, expires_at) VALUES ($1, $2, $3)',
+            [admin.id, token, expiresAt]
+        );
 
-        // Try to send email if configured
         const nodemailer = require('nodemailer');
         if (process.env.MAIL_HOST && process.env.MAIL_USER) {
             const transporter = nodemailer.createTransport({
                 host: process.env.MAIL_HOST,
                 port: Number(process.env.MAIL_PORT) || 587,
                 secure: (process.env.MAIL_SECURE === 'true'),
-                auth: {
-                    user: process.env.MAIL_USER,
-                    pass: process.env.MAIL_PASS
-                }
+                auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS }
             });
 
             const from = process.env.MAIL_FROM || process.env.MAIL_USER;
@@ -365,14 +363,13 @@ exports.forgotPassword = async (req, res) => {
                 from,
                 to: admin.email || process.env.MAIL_USER,
                 subject: 'Reset password admin - Cahaya Phone',
-                text: `Halo ${admin.nama || admin.username},\n\nGunakan link berikut untuk mereset password Anda (berlaku 1 jam): ${resetLink}\n\nJika Anda tidak meminta ini, abaikan pesan ini.`,
-                html: `<p>Halo ${admin.nama || admin.username},</p><p>Gunakan link berikut untuk mereset password Anda (berlaku 1 jam): <a href="${resetLink}">${resetLink}</a></p><p>Jika Anda tidak meminta ini, abaikan pesan ini.</p>`
+                text: `Halo ${admin.nama || admin.username},\n\nGunakan link berikut untuk mereset password Anda (berlaku 1 jam): ${resetLink}`,
+                html: `<p>Halo ${admin.nama || admin.username},</p><p>Klik link berikut untuk reset password (berlaku 1 jam): <a href="${resetLink}">${resetLink}</a></p>`
             });
 
-            return res.json({ success: true, message: 'Reset link dikirim ke email admin (jika terdaftar).' });
+            return res.json({ success: true, message: 'Reset link dikirim ke email admin.' });
         }
 
-        // Fallback for dev: return token in response if mail not configured (developer mode)
         return res.json({ success: true, message: 'Reset token created (no mail configured)', token });
     } catch (error) {
         console.error('❌ Forgot password error:', error);
@@ -388,7 +385,10 @@ exports.validateResetToken = async (req, res) => {
         const token = req.query.token;
         if (!token) return res.status(400).json({ success: false, message: 'Token is required' });
 
-        const [rows] = await db.query('SELECT id, admin_id, expires_at, used FROM admin_reset_tokens WHERE token = ?', [token]);
+        const { rows } = await db.query(
+            'SELECT id, admin_id, expires_at, used FROM admin_reset_tokens WHERE token = $1',
+            [token]
+        );
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Token not found' });
         const rec = rows[0];
         if (rec.used) return res.status(400).json({ success: false, message: 'Token already used' });
@@ -403,26 +403,24 @@ exports.validateResetToken = async (req, res) => {
 
 /**
  * POST /api/admin/reset
- * Body: { token, new_password }
  */
 exports.resetPassword = async (req, res) => {
     try {
         const { token, new_password } = req.body;
         if (!token || !new_password) return res.status(400).json({ success: false, message: 'Token and new_password are required' });
 
-        const [rows] = await db.query('SELECT id, admin_id, expires_at, used FROM admin_reset_tokens WHERE token = ?', [token]);
+        const { rows } = await db.query(
+            'SELECT id, admin_id, expires_at, used FROM admin_reset_tokens WHERE token = $1',
+            [token]
+        );
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Token not found' });
         const rec = rows[0];
         if (rec.used) return res.status(400).json({ success: false, message: 'Token already used' });
         if (new Date(rec.expires_at) < new Date()) return res.status(400).json({ success: false, message: 'Token expired' });
 
-        // Update password
-        const bcrypt = require('bcryptjs');
         const hash = await bcrypt.hash(new_password, 10);
-        await db.query('UPDATE admins SET password = ? WHERE id = ?', [hash, rec.admin_id]);
-
-        // Mark token used
-        await db.query('UPDATE admin_reset_tokens SET used = 1 WHERE id = ?', [rec.id]);
+        await db.query('UPDATE admins SET password = $1 WHERE id = $2', [hash, rec.admin_id]);
+        await db.query('UPDATE admin_reset_tokens SET used = TRUE WHERE id = $1', [rec.id]);
 
         res.json({ success: true, message: 'Password telah direset' });
     } catch (error) {

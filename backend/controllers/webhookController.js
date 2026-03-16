@@ -14,7 +14,6 @@ exports.handleWhatsAppWebhook = async (req, res) => {
     try {
         console.log('📥 Webhook received:', JSON.stringify(req.body, null, 2));
 
-        // Parse payload dari Fonnte atau Wablas
         let phoneNumber, message, senderName;
 
         // Format Fonnte
@@ -36,12 +35,10 @@ exports.handleWhatsAppWebhook = async (req, res) => {
             });
         }
 
-        // Clean nomor WhatsApp
         const cleanPhone = phoneNumber.replace(/\D/g, '');
 
-        // Cek apakah customer sudah ada
-        const [existing] = await db.query(
-            'SELECT id, nama_lengkap, status FROM customers WHERE whatsapp = ?',
+        const { rows: existing } = await db.query(
+            'SELECT id, nama_lengkap, status FROM customers WHERE whatsapp = $1',
             [cleanPhone]
         );
 
@@ -49,20 +46,16 @@ exports.handleWhatsAppWebhook = async (req, res) => {
         let customerStatus;
 
         if (existing.length > 0) {
-            // Customer sudah ada
             customerId = existing[0].id;
             customerStatus = 'Existing';
 
-            // Update status jadi Existing
             await db.query(
-                'UPDATE customers SET status = ? WHERE id = ?',
+                'UPDATE customers SET status = $1 WHERE id = $2',
                 ['Existing', customerId]
             );
 
             console.log(`✅ Existing customer: ${customerId}`);
         } else {
-            // Customer baru dari Instagram/sosmed
-            // Deteksi source dari pesan
             let source = 'Unknown';
             const lowerMessage = message.toLowerCase();
 
@@ -74,32 +67,27 @@ exports.handleWhatsAppWebhook = async (req, res) => {
                 source = 'TikTok';
             }
 
-            // Insert customer baru
-            const [result] = await db.query(
-                `INSERT INTO customers (
-                    nama_lengkap, whatsapp, source, status
-                ) VALUES (?, ?, ?, 'New')`,
+            const { rows: inserted } = await db.query(
+                `INSERT INTO customers (nama_lengkap, whatsapp, source, status)
+                VALUES ($1, $2, $3, 'New') RETURNING id`,
                 [senderName || 'Customer Baru', cleanPhone, source]
             );
 
-            customerId = result.insertId;
+            customerId = inserted[0].id;
             customerStatus = 'New';
 
             console.log(`✅ New customer created from ${source}: ${customerId}`);
 
-            // Kirim welcome message untuk customer baru
             await whatsappService.sendWelcomeMessage(cleanPhone, senderName);
         }
 
-        // Simpan pesan masuk ke database
         await db.query(
-            'INSERT INTO messages (customer_id, direction, message) VALUES (?, ?, ?)',
+            'INSERT INTO messages (customer_id, direction, message) VALUES ($1, $2, $3)',
             [customerId, 'in', message]
         );
 
         console.log(`✅ Message saved for customer: ${customerId}`);
 
-        // Response sukses ke webhook
         res.json({
             success: true,
             message: 'Webhook processed successfully',
@@ -109,8 +97,7 @@ exports.handleWhatsAppWebhook = async (req, res) => {
 
     } catch (error) {
         console.error('❌ Webhook error:', error);
-        
-        // Tetap return 200 agar webhook tidak retry terus
+
         res.json({
             success: false,
             message: 'Error processing webhook',

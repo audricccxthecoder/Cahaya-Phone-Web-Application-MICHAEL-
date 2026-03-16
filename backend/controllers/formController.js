@@ -20,7 +20,6 @@ exports.submitForm = async (req, res) => {
 
         const finalName = nama || nama_lengkap;
 
-        // Basic validation
         if (!finalName || !whatsapp) {
             return res.status(400).json({
                 success: false,
@@ -28,32 +27,27 @@ exports.submitForm = async (req, res) => {
             });
         }
 
-        // Clean phone number
         const cleanPhone = whatsapp.replace(/\D/g, '');
 
-        // Combine address/email/kota into alamat field
         const extra = [];
         if (kota) extra.push(`Kota: ${kota}`);
         if (email) extra.push(`Email: ${email}`);
         const fullAddress = [alamat, extra.join(' | ')].filter(Boolean).join(' | ');
 
-        // Prepare numeric values
         const parsedHarga = harga ? parseFloat(harga) : null;
         const parsedQty = qty ? parseInt(qty, 10) : 1;
 
-        // Determine source based on `tahu_dari` (map common inputs to canonical sources)
         let source = 'Website';
         if (tahu_dari) {
             const td = String(tahu_dari).trim();
             const tdLower = td.toLowerCase();
 
-            // Mapping table (regex) for common inputs
             const mappings = [
-                {pattern: /instagram/i, name: 'Instagram'},
-                {pattern: /website/i, name: 'Website'},
-                {pattern: /facebook/i, name: 'Facebook'},
-                {pattern: /tiktok/i, name: 'TikTok'},
-                {pattern: /(teman|temen|keluarga)/i, name: 'Teman/Keluarga'}
+                { pattern: /instagram/i, name: 'Instagram' },
+                { pattern: /website/i, name: 'Website' },
+                { pattern: /facebook/i, name: 'Facebook' },
+                { pattern: /tiktok/i, name: 'TikTok' },
+                { pattern: /(teman|temen|keluarga)/i, name: 'Teman/Keluarga' }
             ];
 
             const found = mappings.find(m => m.pattern.test(tdLower));
@@ -62,20 +56,18 @@ exports.submitForm = async (req, res) => {
             } else if (td.trim() === '') {
                 source = 'Website';
             } else {
-                // Normalize unknown inputs: capitalize words
                 source = td.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
             }
         }
 
-        // Debug log to help verify mapping
         console.log(`🧭 Determined source from tahu_dari='${tahu_dari}' -> source='${source}'`);
 
-        // Insert customer with all fields (use computed source)
-        const [result] = await db.query(
+        const { rows } = await db.query(
             `INSERT INTO customers (
                 nama_lengkap, nama_sales, merk_unit, tipe_unit, harga, qty,
                 tanggal_lahir, alamat, whatsapp, metode_pembayaran, tahu_dari, source, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New')`,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'New')
+            RETURNING id`,
             [
                 finalName,
                 nama_sales || null,
@@ -92,15 +84,13 @@ exports.submitForm = async (req, res) => {
             ]
         );
 
-        const customerId = result.insertId;
+        const customerId = rows[0].id;
 
-        // Log an outbound auto-reply message
         await db.query(
-            `INSERT INTO messages (customer_id, direction, message) VALUES (?, 'out', ?)`,
+            `INSERT INTO messages (customer_id, direction, message) VALUES ($1, 'out', $2)`,
             [customerId, `Terima kasih ${finalName}, data Anda telah kami terima. Tim kami akan menghubungi segera.`]
         );
 
-        // Send WhatsApp auto-reply (best-effort)
         try {
             await whatsappService.sendAutoReply({ nama_lengkap: finalName, whatsapp: cleanPhone });
         } catch (waError) {
