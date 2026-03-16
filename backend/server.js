@@ -26,6 +26,29 @@ app.get('/', (req, res) => {
   res.redirect('/customer');
 });
 
+// DB connection test (temporary debug endpoint)
+app.get('/api/health', async (req, res) => {
+  const db = require('./config/database');
+  try {
+    const result = await db.query('SELECT NOW() as time');
+    res.json({
+      status: 'OK',
+      db: 'connected',
+      time: result.rows[0].time,
+      DATABASE_URL_set: !!process.env.DATABASE_URL,
+      JWT_SECRET_set: !!process.env.JWT_SECRET
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'ERROR',
+      db: 'failed',
+      error: err.message,
+      DATABASE_URL_set: !!process.env.DATABASE_URL,
+      JWT_SECRET_set: !!process.env.JWT_SECRET
+    });
+  }
+});
+
 // API Routes (dari controllers)
 app.use('/api', require('./routes/api'));
 
