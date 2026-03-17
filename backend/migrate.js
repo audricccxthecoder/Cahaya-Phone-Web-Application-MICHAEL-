@@ -93,8 +93,9 @@ async function migrate() {
 
     // Buat view statistik
     console.log('Creating view: customer_stats...');
+    await client.query(`DROP VIEW IF EXISTS customer_stats`);
     await client.query(`
-      CREATE OR REPLACE VIEW customer_stats AS
+      CREATE VIEW customer_stats AS
       SELECT
         COUNT(*) as total_customers,
         SUM(CASE WHEN source = 'Website' THEN 1 ELSE 0 END) as from_website,
