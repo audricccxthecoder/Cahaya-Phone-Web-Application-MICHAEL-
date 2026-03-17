@@ -47,11 +47,12 @@ exports.handleWhatsAppWebhook = async (req, res) => {
 
         if (existing.length > 0) {
             customerId = existing[0].id;
-            customerStatus = 'Existing';
+            customerStatus = 'Contacted';
 
+            // Only auto-advance from New to Contacted; preserve manual status changes
             await db.query(
-                'UPDATE customers SET status = $1 WHERE id = $2',
-                ['Existing', customerId]
+                'UPDATE customers SET status = $1 WHERE id = $2 AND status = $3',
+                ['Contacted', customerId, 'New']
             );
 
             console.log(`✅ Existing customer: ${customerId}`);

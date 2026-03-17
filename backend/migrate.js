@@ -84,6 +84,13 @@ async function migrate() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_msg_direction ON messages (direction)`);
     console.log('✅ Table messages created/verified');
 
+    // Migrate old status values to new system
+    console.log('Migrating status values...');
+    await client.query(`UPDATE customers SET status = 'Contacted' WHERE status = 'Existing'`);
+    await client.query(`UPDATE customers SET status = 'Inactive' WHERE status = 'Old'`);
+    await client.query(`UPDATE customers SET status = 'New' WHERE status NOT IN ('New','Contacted','Follow Up','Completed','Inactive')`);
+    console.log('✅ Status values migrated');
+
     // Buat view statistik
     console.log('Creating view: customer_stats...');
     await client.query(`
@@ -96,7 +103,10 @@ async function migrate() {
         SUM(CASE WHEN source = 'TikTok' THEN 1 ELSE 0 END) as from_tiktok,
         SUM(CASE WHEN source LIKE '%Teman%' OR source LIKE '%Keluarga%' THEN 1 ELSE 0 END) as from_friends,
         SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as new_customers,
-        SUM(CASE WHEN status = 'Old' THEN 1 ELSE 0 END) as old_customers,
+        SUM(CASE WHEN status = 'Contacted' THEN 1 ELSE 0 END) as contacted_customers,
+        SUM(CASE WHEN status = 'Follow Up' THEN 1 ELSE 0 END) as followup_customers,
+        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_customers,
+        SUM(CASE WHEN status = 'Inactive' THEN 1 ELSE 0 END) as inactive_customers,
         SUM(CASE WHEN DATE(created_at) = CURRENT_DATE THEN 1 ELSE 0 END) as today_customers,
         SUM(CASE WHEN source NOT IN ('Website','Instagram','Facebook','TikTok','Teman/Keluarga') THEN 1 ELSE 0 END) as from_others
       FROM customers

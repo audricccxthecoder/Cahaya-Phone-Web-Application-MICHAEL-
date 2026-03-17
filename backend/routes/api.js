@@ -52,6 +52,7 @@ router.get('/admin/stats', authMiddleware, adminController.getStats);
 router.get('/admin/customers', authMiddleware, adminController.getCustomers);
 router.get('/admin/customers/export', authMiddleware, adminController.exportContacts);
 router.get('/admin/customers/export/vcf', authMiddleware, adminController.exportVCard);
+router.patch('/admin/customers/:id/status', authMiddleware, adminController.updateCustomerStatus);
 router.get('/admin/customers/:id', authMiddleware, adminController.getCustomerById);
 
 // Messages

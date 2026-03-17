@@ -344,15 +344,43 @@ tr:hover {
     color: #155724;
 }
 
-.badge.existing {
+.badge.contacted {
     background: #fff3cd;
     color: #856404;
 }
 
-.badge.old {
+.badge.follow-up {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.badge.completed {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.badge.inactive {
     background: #f3f4f6;
     color: #6c757d;
 }
+
+/* Status dropdown in customer table */
+.status-select {
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: auto;
+    width: auto;
+}
+
+.status-select.new { background: #d4edda; color: #155724; }
+.status-select.contacted { background: #fff3cd; color: #856404; }
+.status-select.follow-up { background: #cce5ff; color: #004085; }
+.status-select.completed { background: #d1fae5; color: #065f46; }
+.status-select.inactive { background: #f3f4f6; color: #6c757d; }
 
 .badge.in {
     background: #d1ecf1;
@@ -458,6 +486,23 @@ select:focus {
 
 .filter-select {
     min-width: 150px;
+}
+
+.filter-date {
+    min-width: 140px;
+    padding: 10px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.filter-date:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.btn-export {
+    white-space: nowrap;
 }
 
 /* ============================================

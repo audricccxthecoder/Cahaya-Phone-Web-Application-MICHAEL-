@@ -9,6 +9,37 @@ const jwt = require('jsonwebtoken');
 const whatsappService = require('../config/whatsapp');
 const { sanitizePhone } = require('../utils/phoneUtils');
 
+const VALID_STATUSES = ['New', 'Contacted', 'Follow Up', 'Completed', 'Inactive'];
+
+/**
+ * Build WHERE clause from export/filter query params
+ */
+function buildExportFilter(query) {
+    const conditions = [];
+    const params = [];
+    let idx = 1;
+
+    if (query.source) {
+        conditions.push(`source = $${idx++}`);
+        params.push(query.source);
+    }
+    if (query.status) {
+        conditions.push(`status = $${idx++}`);
+        params.push(query.status);
+    }
+    if (query.date_from) {
+        conditions.push(`created_at >= $${idx++}`);
+        params.push(query.date_from);
+    }
+    if (query.date_to) {
+        conditions.push(`created_at < ($${idx++})::date + 1`);
+        params.push(query.date_to);
+    }
+
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    return { where, params };
+}
+
 /**
  * Login admin
  * POST /api/admin/login
@@ -152,6 +183,38 @@ exports.getCustomerById = async (req, res) => {
             success: false,
             message: 'Gagal mengambil data customer'
         });
+    }
+};
+
+/**
+ * Update customer status
+ * PATCH /api/admin/customers/:id/status
+ */
+exports.updateCustomerStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status || !VALID_STATUSES.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Status tidak valid. Pilihan: ${VALID_STATUSES.join(', ')}`
+            });
+        }
+
+        const { rowCount } = await db.query(
+            'UPDATE customers SET status = $1, updated_at = NOW() WHERE id = $2',
+            [status, id]
+        );
+
+        if (rowCount === 0) {
+            return res.status(404).json({ success: false, message: 'Customer tidak ditemukan' });
+        }
+
+        res.json({ success: true, message: 'Status berhasil diubah', data: { id: Number(id), status } });
+    } catch (error) {
+        console.error('❌ Update status error:', error);
+        res.status(500).json({ success: false, message: 'Gagal mengubah status' });
     }
 };
 
@@ -414,11 +477,13 @@ exports.exportContacts = async (req, res) => {
         console.log('📥 Export contacts requested');
 
         const format = req.query.format || 'full';
+        const { where, params } = buildExportFilter(req.query);
 
         const { rows: customers } = await db.query(
             `SELECT nama_lengkap, whatsapp, nama_sales, merk_unit, tipe_unit,
                     source, status, opted_in, created_at
-             FROM customers ORDER BY created_at DESC`
+             FROM customers ${where} ORDER BY created_at DESC`,
+            params
         );
 
         console.log(`📥 Export: found ${customers.length} customers (format=${format})`);
@@ -474,8 +539,11 @@ exports.exportVCard = async (req, res) => {
     try {
         console.log('📥 Export vCard requested');
 
+        const { where, params } = buildExportFilter(req.query);
+
         const { rows: customers } = await db.query(
-            `SELECT nama_lengkap, whatsapp FROM customers ORDER BY created_at DESC`
+            `SELECT nama_lengkap, whatsapp FROM customers ${where} ORDER BY created_at DESC`,
+            params
         );
 
         console.log(`📥 Export vCard: found ${customers.length} customers`);
@@ -546,13 +614,19 @@ exports.startBroadcast = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tidak ada customer opted-in untuk dibroadcast' });
         }
 
-        // Log message delivery to DB
+        // Log message delivery to DB + auto-advance status
         const onLog = async (customerId, msg, deliveryStatus) => {
-            const direction = deliveryStatus === 'sent' ? 'out' : 'out';
             await db.query(
                 `INSERT INTO messages (customer_id, direction, message) VALUES ($1, $2, $3)`,
-                [customerId, direction, `[BROADCAST][${deliveryStatus.toUpperCase()}] ${msg}`]
+                [customerId, 'out', `[BROADCAST][${deliveryStatus.toUpperCase()}] ${msg}`]
             );
+            // Auto-advance: New → Contacted on successful broadcast
+            if (deliveryStatus === 'sent') {
+                await db.query(
+                    `UPDATE customers SET status = 'Contacted' WHERE id = $1 AND status = 'New'`,
+                    [customerId]
+                );
+            }
         };
 
         const status = whatsappService.startBroadcast(customers, message, onLog);

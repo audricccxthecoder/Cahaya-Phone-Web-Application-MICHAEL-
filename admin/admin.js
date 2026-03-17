@@ -784,8 +784,12 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 document.getElementById('fromInstagram').textContent = stats.data.from_instagram || 0;
                 document.getElementById('fromWebsite').textContent = stats.data.from_website || 0;
                 document.getElementById('newCustomers').textContent = stats.data.new_customers || 0;
+                document.getElementById('contactedCustomers').textContent = stats.data.contacted_customers || 0;
+                document.getElementById('followupCustomers').textContent = stats.data.followup_customers || 0;
+                document.getElementById('completedCustomers').textContent = stats.data.completed_customers || 0;
+                document.getElementById('inactiveCustomers').textContent = stats.data.inactive_customers || 0;
 
-                // New source stats
+                // Source stats
                 document.getElementById('fromFacebook').textContent = stats.data.from_facebook || 0;
                 document.getElementById('fromTikTok').textContent = stats.data.from_tiktok || 0;
                 document.getElementById('fromFriends').textContent = stats.data.from_friends || 0;
@@ -902,17 +906,24 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 <tbody>
         `;
 
+        const validStatuses = ['New', 'Contacted', 'Follow Up', 'Completed', 'Inactive'];
+
         customers.forEach((customer, index) => {
             const date = new Date(customer.created_at).toLocaleDateString('id-ID');
             const sourceClass = String(customer.source || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
             const statusClass = String(customer.status || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
-            const produk = customer.merk_unit && customer.tipe_unit 
-                ? `${customer.merk_unit} ${customer.tipe_unit}` 
+            const produk = customer.merk_unit && customer.tipe_unit
+                ? `${customer.merk_unit} ${customer.tipe_unit}`
                 : '-';
-            const harga = customer.harga 
+            const harga = customer.harga
                 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(customer.harga)
                 : '-';
-            
+
+            const statusOptions = validStatuses.map(s => {
+                const selected = customer.status === s ? 'selected' : '';
+                return `<option value="${s}" ${selected}>${s}</option>`;
+            }).join('');
+
             html += `
                 <tr>
                     <td>${index + 1}</td>
@@ -923,7 +934,11 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                     <td>${harga}</td>
                     <td>${customer.metode_pembayaran || '-'}</td>
                     <td><span class="badge ${sourceClass}">${customer.source}</span></td>
-                    <td><span class="badge ${statusClass}">${customer.status}</span></td>
+                    <td>
+                        <select class="status-select ${statusClass}" onchange="updateStatus(${customer.id}, this.value, this)">
+                            ${statusOptions}
+                        </select>
+                    </td>
                     <td>${date}</td>
                     <td>
                         <div class="table-actions">
@@ -938,24 +953,53 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         container.innerHTML = html;
     }
 
-    // Search customer
-    document.getElementById('searchCustomer').addEventListener('input', (e) => {
-        const search = e.target.value.toLowerCase().trim();
-        if (!search) return displayCustomers(allCustomers);
-        const filtered = allCustomers.filter(customer => 
-            customer.nama_lengkap.toLowerCase().includes(search)
-        );
-        displayCustomers(filtered);
-    });
+    // Combined filter function
+    function applyFilters() {
+        const search = document.getElementById('searchCustomer').value.toLowerCase().trim();
+        const source = document.getElementById('filterSource').value;
+        const status = document.getElementById('filterStatus').value;
+        const dateFrom = document.getElementById('filterDateFrom').value;
+        const dateTo = document.getElementById('filterDateTo').value;
 
-    // Filter by source
-    document.getElementById('filterSource').addEventListener('change', (e) => {
-        const source = e.target.value;
-        const filtered = source 
-            ? allCustomers.filter(customer => customer.source === source)
-            : allCustomers;
+        let filtered = allCustomers;
+        if (search) filtered = filtered.filter(c => c.nama_lengkap.toLowerCase().includes(search));
+        if (source) filtered = filtered.filter(c => c.source === source);
+        if (status) filtered = filtered.filter(c => c.status === status);
+        if (dateFrom) filtered = filtered.filter(c => new Date(c.created_at) >= new Date(dateFrom));
+        if (dateTo) {
+            const to = new Date(dateTo);
+            to.setDate(to.getDate() + 1);
+            filtered = filtered.filter(c => new Date(c.created_at) < to);
+        }
         displayCustomers(filtered);
-    });
+    }
+
+    document.getElementById('searchCustomer').addEventListener('input', applyFilters);
+    document.getElementById('filterSource').addEventListener('change', applyFilters);
+    document.getElementById('filterStatus').addEventListener('change', applyFilters);
+    document.getElementById('filterDateFrom').addEventListener('change', applyFilters);
+    document.getElementById('filterDateTo').addEventListener('change', applyFilters);
+
+    // Update customer status
+    window.updateStatus = async function(customerId, newStatus, selectEl) {
+        const result = await apiCall(`/admin/customers/${customerId}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: newStatus })
+        });
+        if (result && result.success) {
+            // Update local cache
+            const cust = allCustomers.find(c => c.id === customerId);
+            if (cust) cust.status = newStatus;
+            // Update select styling
+            const statusClass = newStatus.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            selectEl.className = 'status-select ' + statusClass;
+        } else {
+            alert('Gagal update status: ' + (result?.message || 'Unknown error'));
+            // Revert select
+            const cust = allCustomers.find(c => c.id === customerId);
+            if (cust) selectEl.value = cust.status;
+        }
+    };
 
     // View customer detail
     window.viewCustomer = async function(customerId) {
@@ -1034,7 +1078,13 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             </div>
             <div class="detail-group">
                 <div class="detail-label">Status</div>
-                <div class="detail-value"><span class="badge ${statusClass}">${customer.status}</span></div>
+                <div class="detail-value">
+                    <select class="status-select ${statusClass}" onchange="updateStatus(${customer.id}, this.value, this)">
+                        ${['New','Contacted','Follow Up','Completed','Inactive'].map(s =>
+                            `<option value="${s}" ${customer.status === s ? 'selected' : ''}>${s}</option>`
+                        ).join('')}
+                    </select>
+                </div>
             </div>
             <div class="detail-group">
                 <div class="detail-label">Tanggal Daftar</div>
@@ -1125,9 +1175,23 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     // EXPORT CONTACTS
     // ============================================
 
+    function getExportParams() {
+        const source = document.getElementById('filterSource').value;
+        const status = document.getElementById('filterStatus').value;
+        const dateFrom = document.getElementById('filterDateFrom').value;
+        const dateTo = document.getElementById('filterDateTo').value;
+        let params = '';
+        if (source) params += `&source=${encodeURIComponent(source)}`;
+        if (status) params += `&status=${encodeURIComponent(status)}`;
+        if (dateFrom) params += `&date_from=${dateFrom}`;
+        if (dateTo) params += `&date_to=${dateTo}`;
+        return params;
+    }
+
     async function doExport(format) {
         try {
-            const res = await fetch(`${API_URL}/admin/customers/export?format=${format}`, {
+            const filterParams = getExportParams();
+            const res = await fetch(`${API_URL}/admin/customers/export?format=${format}${filterParams}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -1165,7 +1229,8 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     // Export vCard (.vcf) — direct phone contact import
     document.getElementById('exportVcfBtn').addEventListener('click', async () => {
         try {
-            const res = await fetch(`${API_URL}/admin/customers/export/vcf`, {
+            const filterParams = getExportParams();
+            const res = await fetch(`${API_URL}/admin/customers/export/vcf?${filterParams.replace(/^&/, '')}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 

@@ -46,8 +46,40 @@
                 <div class="stat-card">
                     <div class="stat-icon">⭐</div>
                     <div class="stat-info">
-                        <div class="stat-label">Customer Baru</div>
+                        <div class="stat-label">New</div>
                         <div class="stat-value" id="newCustomers">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">📞</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Contacted</div>
+                        <div class="stat-value" id="contactedCustomers">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Follow Up</div>
+                        <div class="stat-value" id="followupCustomers">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Completed</div>
+                        <div class="stat-value" id="completedCustomers">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">💤</div>
+                    <div class="stat-info">
+                        <div class="stat-label">Inactive</div>
+                        <div class="stat-value" id="inactiveCustomers">-</div>
                     </div>
                 </div>
 
@@ -115,7 +147,7 @@
         <div id="customersPage" class="page">
             <div class="page-header">
                 <h2>Daftar Customer</h2>
-                <div class="page-actions">
+                <div class="page-actions" style="flex-wrap:wrap;">
                     <input type="text" id="searchCustomer" placeholder="Cari customer..." class="search-input">
                     <select id="filterSource" class="filter-select">
                         <option value="">Semua Source</option>
@@ -126,6 +158,16 @@
                         <option value="Teman/Keluarga">Teman/Keluarga</option>
                         <option value="Lainnya">Lainnya</option>
                     </select>
+                    <select id="filterStatus" class="filter-select">
+                        <option value="">Semua Status</option>
+                        <option value="New">New</option>
+                        <option value="Contacted">Contacted</option>
+                        <option value="Follow Up">Follow Up</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                    <input type="date" id="filterDateFrom" class="filter-date" title="Dari tanggal">
+                    <input type="date" id="filterDateTo" class="filter-date" title="Sampai tanggal">
                     <button id="exportBtn" class="btn-export">⬇ Export Full CSV</button>
                     <button id="exportSimpleBtn" class="btn-export" title="Hanya Nama & Nomor HP (CSV)">⬇ Export CSV Kontak</button>
                     <button id="exportVcfBtn" class="btn-export" style="background:#27ae60;color:white;" title="Download file .vcf — tinggal tap di HP langsung masuk ke kontak">⬇ Export ke Kontak HP (.vcf)</button>
