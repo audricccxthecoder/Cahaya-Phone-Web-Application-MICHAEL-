@@ -600,7 +600,7 @@ exports.startBroadcast = async (req, res) => {
         }
 
         // Get opted-in customers
-        let query = `SELECT id, nama_lengkap, whatsapp FROM customers WHERE opted_in = TRUE`;
+        let query = `SELECT id, nama_lengkap, whatsapp FROM customers WHERE opted_in IS NOT FALSE`;
         const params = [];
         if (source_filter) {
             query += ` AND source = $1`;

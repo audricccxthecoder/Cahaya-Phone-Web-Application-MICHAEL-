@@ -84,6 +84,12 @@ async function migrate() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_msg_direction ON messages (direction)`);
     console.log('✅ Table messages created/verified');
 
+    // Ensure opted_in column exists and backfill NULLs
+    console.log('Ensuring opted_in column...');
+    await client.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS opted_in BOOLEAN DEFAULT TRUE`);
+    await client.query(`UPDATE customers SET opted_in = TRUE WHERE opted_in IS NULL`);
+    console.log('✅ opted_in column verified');
+
     // Migrate old status values to new system
     console.log('Migrating status values...');
     await client.query(`UPDATE customers SET status = 'Contacted' WHERE status = 'Existing'`);
