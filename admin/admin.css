@@ -660,45 +660,134 @@ select:focus {
    RESPONSIVE
    ============================================ */
 
+/* ============================================
+   MOBILE: prevent horizontal scroll on body
+   ============================================ */
+html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+
+/* Table wrapper: allow horizontal scroll inside card */
+.card-body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 @media (max-width: 768px) {
+    .header {
+        padding: 15px;
+    }
+
     .header-content {
         flex-direction: column;
-        gap: 15px;
+        gap: 10px;
     }
-    
+
+    .header h1 {
+        font-size: 18px;
+    }
+
+    .header-actions {
+        gap: 10px;
+    }
+
     .nav {
         flex-wrap: wrap;
-        padding: 0 15px;
+        padding: 0 10px;
+        gap: 0;
     }
-    
+
+    .nav-item {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+
     .main {
-        padding: 0 15px;
+        padding: 0 10px;
+        margin: 15px auto;
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
+        gap: 10px;
     }
-    
+
+    .stat-card {
+        padding: 15px;
+        gap: 15px;
+    }
+
+    .stat-icon {
+        font-size: 30px;
+    }
+
+    .stat-value {
+        font-size: 24px;
+    }
+
+    .stat-label {
+        font-size: 13px;
+    }
+
     .page-header {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .page-actions {
         width: 100%;
         flex-direction: column;
     }
-    
+
     .search-input,
-    .filter-select {
+    .filter-select,
+    .filter-date {
         width: 100%;
+        min-width: unset;
     }
-    
+
+    .btn-export {
+        width: 100%;
+        text-align: center;
+    }
+
     table {
         font-size: 12px;
+        min-width: 500px;
     }
-    
+
     th, td {
-        padding: 8px;
+        padding: 8px 6px;
+        white-space: nowrap;
+    }
+
+    .card-header {
+        padding: 15px;
+    }
+
+    .card-body {
+        padding: 15px;
+    }
+
+    .badge {
+        font-size: 10px;
+        padding: 3px 7px;
+    }
+
+    /* Modal responsive */
+    .modal-content {
+        width: 95%;
+        margin: 10px;
+    }
+
+    .modal-body {
+        padding: 15px;
+    }
+
+    /* Broadcast page */
+    .btn-primary {
+        font-size: 13px;
+        padding: 10px 15px;
     }
 }
