@@ -84,7 +84,7 @@ form.addEventListener('submit', async (e) => {
     
     // Disable button
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Mengirim...';
+    submitBtn.querySelector('.btn-text').textContent = 'Mengirim...';
     
     try {
         const response = await fetch(`${API_URL}/form-submit`, {
@@ -119,7 +119,7 @@ form.addEventListener('submit', async (e) => {
     } finally {
         // Enable button
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Kirim Pendaftaran';
+        submitBtn.querySelector('.btn-text').textContent = 'Kirim Data Customer';
     }
 });
 

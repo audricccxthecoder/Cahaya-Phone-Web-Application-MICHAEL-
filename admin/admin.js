@@ -1310,12 +1310,22 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         broadcastProcessing = true;
         broadcastStartBtn.disabled = true;
 
+        let errorCount = 0;
+        const MAX_ERRORS = 5; // Stop after 5 consecutive errors
+
         while (broadcastProcessing) {
             const res = await apiCall('/admin/broadcast/process', { method: 'POST', body: '{}' });
             if (!res || !res.success) {
-                broadcastProcessing = false;
-                break;
+                errorCount++;
+                if (errorCount >= MAX_ERRORS) {
+                    console.warn('⚠️ Broadcast loop stopped: too many consecutive errors');
+                    broadcastProcessing = false;
+                    break;
+                }
+                await new Promise(r => setTimeout(r, 3000));
+                continue;
             }
+            errorCount = 0; // reset on success
             renderBroadcastStatus(res.status);
 
             // Stop loop if broadcast is done or paused
