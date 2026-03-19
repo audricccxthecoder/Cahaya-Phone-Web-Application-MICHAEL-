@@ -684,6 +684,80 @@ exports.quickSyncVCF = async (req, res) => {
 };
 
 /**
+ * Quick-sync: list customers by date (JSON)
+ * GET /api/sync/list?key=SECRET&date=2026-03-20
+ */
+exports.quickSyncList = async (req, res) => {
+    try {
+        const { key, date } = req.query;
+        const syncKey = process.env.SYNC_SECRET || 'cahaya-sync-2026';
+        if (key !== syncKey) {
+            return res.status(403).json({ success: false, message: 'Invalid sync key' });
+        }
+
+        let query, params;
+        if (date) {
+            query = `SELECT id, nama_lengkap, whatsapp, merk_unit, tipe_unit, created_at FROM customers WHERE DATE(created_at) = $1 ORDER BY created_at DESC`;
+            params = [date];
+        } else {
+            query = `SELECT id, nama_lengkap, whatsapp, merk_unit, tipe_unit, created_at FROM customers ORDER BY created_at DESC LIMIT 100`;
+            params = [];
+        }
+
+        const { rows } = await db.query(query, params);
+        res.json({ success: true, count: rows.length, customers: rows });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Quick-sync: download VCF for specific customer IDs
+ * POST /api/sync/contacts/selected
+ * Body: { key, ids: [1, 2, 3] }
+ */
+exports.quickSyncSelected = async (req, res) => {
+    try {
+        const { key, ids } = req.body;
+        const syncKey = process.env.SYNC_SECRET || 'cahaya-sync-2026';
+        if (key !== syncKey) {
+            return res.status(403).json({ success: false, message: 'Invalid sync key' });
+        }
+
+        if (!ids || !ids.length) {
+            return res.status(400).json({ success: false, message: 'Tidak ada kontak dipilih' });
+        }
+
+        const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+        const { rows: customers } = await db.query(
+            `SELECT nama_lengkap, whatsapp FROM customers WHERE id IN (${placeholders})`,
+            ids
+        );
+
+        const vcards = customers.map(c => {
+            const phone = sanitizePhone(c.whatsapp);
+            const name = String(c.nama_lengkap || '').trim();
+            const escapedName = name.replace(/[;,\\]/g, m => '\\' + m);
+            return [
+                'BEGIN:VCARD',
+                'VERSION:3.0',
+                `FN:${escapedName} - CP`,
+                `TEL;TYPE=CELL:+${phone}`,
+                `NOTE:Customer Cahaya Phone`,
+                'END:VCARD'
+            ].join('\r\n');
+        }).join('\r\n');
+
+        const filename = `cp_contacts_selected.vcf`;
+        res.setHeader('Content-Type', 'text/vcard; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(vcards);
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
  * Get daily broadcast sent count
  * GET /api/admin/broadcast/daily-count
  */
