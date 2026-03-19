@@ -794,6 +794,13 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 document.getElementById('fromTikTok').textContent = stats.data.from_tiktok || 0;
                 document.getElementById('fromFriends').textContent = stats.data.from_friends || 0;
                 document.getElementById('fromOthers').textContent = stats.data.from_others || 0;
+
+                // Pipeline stats
+                document.getElementById('pipelineActive').textContent = stats.data.pipeline_active || 0;
+                document.getElementById('pipelineSuccess').textContent = stats.data.pipeline_success || 0;
+                const formatRp = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+                document.getElementById('totalOmzet').textContent = formatRp(stats.data.total_omzet);
+                document.getElementById('omzetBulanIni').textContent = formatRp(stats.data.omzet_bulan_ini);
             } else {
                 console.warn('⚠️ Failed to load stats');
             }

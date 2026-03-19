@@ -161,11 +161,47 @@ exports.login = async (req, res) => {
  */
 exports.getStats = async (req, res) => {
     try {
+        // Auto-update statuses based on last activity
+        // Contacted → Follow Up: 3 days no messages
+        await db.query(`
+            UPDATE customers SET status = 'Follow Up'
+            WHERE status = 'Contacted' AND tipe = 'Chat Only'
+            AND id NOT IN (
+                SELECT DISTINCT customer_id FROM messages
+                WHERE sent_at > NOW() - INTERVAL '3 days'
+            )
+            AND created_at < NOW() - INTERVAL '3 days'
+        `);
+
+        // Follow Up → Inactive: 7 days no messages
+        await db.query(`
+            UPDATE customers SET status = 'Inactive'
+            WHERE status = 'Follow Up' AND tipe = 'Chat Only'
+            AND id NOT IN (
+                SELECT DISTINCT customer_id FROM messages
+                WHERE sent_at > NOW() - INTERVAL '7 days'
+            )
+            AND created_at < NOW() - INTERVAL '7 days'
+        `);
+
         const { rows } = await db.query('SELECT * FROM customer_stats');
+
+        // Pipeline stats
+        const { rows: pipeline } = await db.query(`
+            SELECT
+                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up')) as pipeline_active,
+                COUNT(*) FILTER (WHERE status = 'Completed') as pipeline_success,
+                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed'), 0) as total_omzet,
+                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW())), 0) as omzet_bulan_ini,
+                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())), 0) as omzet_bulan_lalu,
+                COUNT(*) FILTER (WHERE tipe = 'Belanja') as total_belanja,
+                COUNT(*) FILTER (WHERE tipe = 'Chat Only') as total_chat_only
+            FROM customers
+        `);
 
         res.json({
             success: true,
-            data: rows[0]
+            data: { ...rows[0], ...pipeline[0] }
         });
 
     } catch (error) {
@@ -187,7 +223,7 @@ exports.getCustomers = async (req, res) => {
             `SELECT
                 id, nama_lengkap, nama_sales, merk_unit, tipe_unit,
                 harga, qty, whatsapp, metode_pembayaran,
-                source, status, created_at
+                source, status, tipe, created_at
             FROM customers
             ORDER BY created_at DESC`
         );
