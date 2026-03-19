@@ -186,16 +186,34 @@ exports.getStats = async (req, res) => {
 
         const { rows } = await db.query('SELECT * FROM customer_stats');
 
-        // Pipeline stats
+        // Pipeline stats with month comparisons
         const { rows: pipeline } = await db.query(`
             SELECT
                 COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up')) as pipeline_active,
                 COUNT(*) FILTER (WHERE status = 'Completed') as pipeline_success,
+                COUNT(*) FILTER (WHERE status = 'Inactive') as pipeline_lost,
                 COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed'), 0) as total_omzet,
+
+                -- Bulan ini
+                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up') AND created_at >= DATE_TRUNC('month', NOW())) as active_bulan_ini,
+                COUNT(*) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW())) as success_bulan_ini,
                 COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW())), 0) as omzet_bulan_ini,
+                COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW())) as total_bulan_ini,
+
+                -- Bulan lalu
+                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up') AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as active_bulan_lalu,
+                COUNT(*) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as success_bulan_lalu,
                 COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())), 0) as omzet_bulan_lalu,
+                COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as total_bulan_lalu,
+
+                -- Tipe
                 COUNT(*) FILTER (WHERE tipe = 'Belanja') as total_belanja,
-                COUNT(*) FILTER (WHERE tipe = 'Chat Only') as total_chat_only
+                COUNT(*) FILTER (WHERE tipe = 'Chat Only') as total_chat_only,
+
+                -- Per status detail
+                COUNT(*) FILTER (WHERE status = 'New') as status_new,
+                COUNT(*) FILTER (WHERE status = 'Contacted') as status_contacted,
+                COUNT(*) FILTER (WHERE status = 'Follow Up') as status_follow_up
             FROM customers
         `);
 
