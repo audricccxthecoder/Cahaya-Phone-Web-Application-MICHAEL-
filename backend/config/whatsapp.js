@@ -78,9 +78,7 @@ class WhatsAppService {
      * Auto-reply after customer submits form
      */
     async sendAutoReply(customer) {
-        const message = `Halo ${customer.nama_lengkap}, terima kasih sudah mengunjungi toko kami! ` +
-            `Kami akan mengirimkan promo dan ucapan spesial untuk Anda. ` +
-            `Tim kami akan segera menghubungi Anda.`;
+        const message = `Hai Kak ${customer.nama_lengkap} 😊\nTerima Kasih Banyak sudah berbelanja di toko kami CAHAYA PHONE 🙏🏾🙏🏾\nSemoga puas dan cocok dengan produknya. Jangan sungkan untuk menghubungi kami lagi ya.. 😊`;
         return await this.sendMessage(customer.whatsapp, message);
     }
 

@@ -1380,17 +1380,22 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     broadcastStartBtn.addEventListener('click', async () => {
         const message = document.getElementById('broadcastMessage').value.trim();
         const source = document.getElementById('broadcastSource').value;
+        const merk = document.getElementById('broadcastMerk').value;
+        const metode = document.getElementById('broadcastMetode').value;
         if (!message) {
             alert('Pesan broadcast tidak boleh kosong!');
             return;
         }
-        if (!confirm(`Yakin mau kirim broadcast ke semua customer opted-in${source ? ' dari ' + source : ''}?\n\nPesan:\n${message}`)) return;
+        const filterInfo = [source ? 'source: ' + source : '', merk ? 'merk: ' + merk : '', metode ? 'metode: ' + metode : ''].filter(Boolean).join(', ');
+        if (!confirm(`Yakin mau kirim broadcast ke customer${filterInfo ? ' (' + filterInfo + ')' : ' (semua)'}?\n\nPesan:\n${message}`)) return;
 
         broadcastStartBtn.disabled = true;
         broadcastStartBtn.textContent = 'Memulai...';
 
         const body = { message };
         if (source) body.source_filter = source;
+        if (merk) body.merk_filter = merk;
+        if (metode) body.metode_filter = metode;
 
         const res = await apiCall('/admin/broadcast/start', { method: 'POST', body: JSON.stringify(body) });
         broadcastStartBtn.textContent = '▶ Mulai Broadcast';

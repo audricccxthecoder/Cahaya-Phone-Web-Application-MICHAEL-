@@ -651,7 +651,7 @@ exports.getDailySentCount = async (req, res) => {
  */
 exports.startBroadcast = async (req, res) => {
     try {
-        const { message, source_filter } = req.body;
+        const { message, source_filter, merk_filter, metode_filter } = req.body;
 
         if (!message || String(message).trim() === '') {
             return res.status(400).json({ success: false, message: 'Pesan broadcast tidak boleh kosong' });
@@ -668,12 +668,20 @@ exports.startBroadcast = async (req, res) => {
             });
         }
 
-        // Get opted-in customers
+        // Get opted-in customers with filters
         let query = `SELECT id, nama_lengkap, whatsapp FROM customers WHERE opted_in IS NOT FALSE`;
         const params = [];
         if (source_filter) {
             query += ` AND source = $${params.length + 1}`;
             params.push(source_filter);
+        }
+        if (merk_filter) {
+            query += ` AND merk_unit = $${params.length + 1}`;
+            params.push(merk_filter);
+        }
+        if (metode_filter) {
+            query += ` AND metode_pembayaran = $${params.length + 1}`;
+            params.push(metode_filter);
         }
         query += ` ORDER BY created_at ASC`;
 
