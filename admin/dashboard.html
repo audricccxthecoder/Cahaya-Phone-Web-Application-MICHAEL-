@@ -35,41 +35,49 @@
     <main class="main">
         <!-- Dashboard Page -->
         <div id="dashboardPage" class="page active">
-            <h2>Dashboard</h2>
 
             <!-- Pipeline Overview -->
             <div class="card" style="margin-bottom:20px;padding:24px;background:linear-gradient(135deg,#B91C1C 0%,#8B0000 100%);color:#fff;border:none;">
-                <h3 style="font-family:'Playfair Display',serif;font-size:20px;margin-bottom:20px;color:#fff;">Pipeline Overview</h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                    <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:#fff;margin:0;">Pipeline Overview</h3>
+                    <div style="font-size:11px;opacity:0.7;" id="pipelinePeriod"></div>
+                </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
                     <!-- Pipeline Active -->
                     <div style="background:rgba(255,255,255,0.12);border-radius:12px;padding:16px;">
-                        <div style="font-size:12px;opacity:0.8;margin-bottom:4px;">Pipeline Active</div>
+                        <div style="font-size:12px;opacity:0.8;margin-bottom:4px;">Calon Pembeli (Active)</div>
                         <div style="font-size:28px;font-weight:700;" id="pipelineActive">-</div>
                         <div id="pipelineActiveChange" style="font-size:12px;margin-top:4px;"></div>
-                        <div style="font-size:11px;opacity:0.7;margin-top:8px;line-height:1.4;" id="pipelineActiveDetail"></div>
+                        <div style="font-size:11px;opacity:0.7;margin-top:8px;line-height:1.6;" id="pipelineActiveDetail"></div>
                     </div>
                     <!-- Pipeline Success -->
-                    <div style="background:rgba(255,255,255,0.12);border-radius:12px;padding:16px;">
-                        <div style="font-size:12px;opacity:0.8;margin-bottom:4px;">Pipeline Success</div>
-                        <div style="font-size:28px;font-weight:700;" id="pipelineSuccess">-</div>
-                        <div id="pipelineSuccessChange" style="font-size:12px;margin-top:4px;"></div>
+                    <div onclick="showPipelineDetail('success')" style="background:rgba(255,255,255,0.12);border-radius:12px;padding:16px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">
+                        <div style="font-size:12px;opacity:0.8;margin-bottom:4px;">Transaksi Sukses</div>
+                        <div style="display:flex;align-items:baseline;gap:8px;">
+                            <div style="font-size:28px;font-weight:700;" id="pipelineSuccess">-</div>
+                            <div style="font-size:11px;opacity:0.6;">▸ Lihat Detail</div>
+                        </div>
+                        <div id="pipelineSuccessCompare" style="font-size:12px;margin-top:6px;line-height:1.6;"></div>
                     </div>
                     <!-- Total Omzet -->
-                    <div style="background:rgba(255,255,255,0.12);border-radius:12px;padding:16px;">
+                    <div onclick="showPipelineDetail('omzet')" style="background:rgba(255,255,255,0.12);border-radius:12px;padding:16px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">
                         <div style="font-size:12px;opacity:0.8;margin-bottom:4px;">Total Omzet</div>
-                        <div style="font-size:22px;font-weight:700;" id="totalOmzet">-</div>
+                        <div style="display:flex;align-items:baseline;gap:8px;">
+                            <div style="font-size:22px;font-weight:700;" id="totalOmzet">-</div>
+                            <div style="font-size:11px;opacity:0.6;">▸ Lihat Detail</div>
+                        </div>
                     </div>
                     <!-- Omzet Bulan Ini -->
-                    <div style="background:rgba(255,255,255,0.15);border-radius:12px;padding:16px;border:1px solid rgba(255,255,255,0.2);">
+                    <div style="background:rgba(255,255,255,0.18);border-radius:12px;padding:16px;border:1px solid rgba(255,255,255,0.25);">
                         <div style="font-size:12px;opacity:0.8;margin-bottom:4px;">Omzet Bulan Ini</div>
                         <div style="font-size:22px;font-weight:700;" id="omzetBulanIni">-</div>
-                        <div id="omzetChange" style="font-size:12px;margin-top:4px;"></div>
+                        <div id="omzetCompare" style="font-size:12px;margin-top:6px;line-height:1.6;"></div>
                     </div>
                 </div>
-                <!-- Pipeline Bar -->
+                <!-- Conversion Rate -->
                 <div style="margin-top:20px;">
                     <div style="display:flex;justify-content:space-between;font-size:11px;opacity:0.8;margin-bottom:6px;">
-                        <span>Conversion Rate</span>
+                        <span>Conversion Rate (Calon → Beli)</span>
                         <span id="conversionRate">-</span>
                     </div>
                     <div style="background:rgba(255,255,255,0.15);border-radius:8px;height:10px;overflow:hidden;">
@@ -395,6 +403,18 @@
             </div>
         </div>
     </main>
+
+    <!-- Pipeline Detail Modal -->
+    <div id="pipelineModal" class="modal">
+        <div class="modal-content" style="max-width:600px;">
+            <div class="modal-header">
+                <h3 id="pipelineModalTitle">Detail</h3>
+                <button class="modal-close" onclick="closePipelineModal()">&times;</button>
+            </div>
+            <div id="pipelineModalBody" class="modal-body">
+            </div>
+        </div>
+    </div>
 
     <!-- Customer Detail Modal -->
     <div id="customerModal" class="modal">

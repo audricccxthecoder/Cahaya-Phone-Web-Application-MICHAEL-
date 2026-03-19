@@ -59,6 +59,7 @@ router.get('/debug/admins', adminController.debugAdmins);
 
 // Dashboard statistics
 router.get('/admin/stats', authMiddleware, adminController.getStats);
+router.get('/admin/pipeline/monthly', authMiddleware, adminController.getPipelineMonthly);
 
 // Customers
 router.get('/admin/customers', authMiddleware, adminController.getCustomers);

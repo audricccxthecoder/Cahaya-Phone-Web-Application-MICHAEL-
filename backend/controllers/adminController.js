@@ -232,6 +232,33 @@ exports.getStats = async (req, res) => {
 };
 
 /**
+ * Get monthly pipeline breakdown
+ * GET /api/admin/pipeline/monthly
+ */
+exports.getPipelineMonthly = async (req, res) => {
+    try {
+        const { rows } = await db.query(`
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as bulan,
+                TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') as label,
+                COUNT(*) FILTER (WHERE status = 'Completed') as sukses,
+                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up')) as active,
+                COUNT(*) FILTER (WHERE status = 'Inactive') as lost,
+                COUNT(*) as total,
+                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed'), 0) as omzet
+            FROM customers
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at) DESC
+            LIMIT 12
+        `);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('❌ Pipeline monthly error:', error);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data pipeline' });
+    }
+};
+
+/**
  * Get all customers
  * GET /api/admin/customers
  */

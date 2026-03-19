@@ -798,45 +798,53 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 // Pipeline stats
                 const d = stats.data;
                 const formatRp = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+                const bulanNow = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
+                document.getElementById('pipelinePeriod').textContent = bulanNow;
                 document.getElementById('pipelineActive').textContent = d.pipeline_active || 0;
                 document.getElementById('pipelineSuccess').textContent = d.pipeline_success || 0;
                 document.getElementById('totalOmzet').textContent = formatRp(d.total_omzet);
                 document.getElementById('omzetBulanIni').textContent = formatRp(d.omzet_bulan_ini);
 
-                // Percentage change helper
-                function changeHTML(current, previous, isRp) {
-                    const cur = Number(current) || 0;
-                    const prev = Number(previous) || 0;
-                    if (prev === 0 && cur === 0) return '<span style="opacity:0.6;">— Belum ada data</span>';
-                    if (prev === 0) return '<span style="color:#4ADE80;">▲ Baru bulan ini</span>';
-                    const pct = ((cur - prev) / prev * 100).toFixed(1);
+                // Compare helper
+                function compareHTML(cur, prev, isRp) {
+                    cur = Number(cur) || 0;
+                    prev = Number(prev) || 0;
+                    if (prev === 0 && cur === 0) return '';
+                    if (prev === 0) return `<span style="color:#4ADE80;">▲ Baru bulan ini</span>`;
                     const diff = cur - prev;
-                    if (diff > 0) {
-                        return `<span style="color:#4ADE80;">▲ +${pct}%</span> <span style="opacity:0.6;">vs bulan lalu${isRp ? ' (' + formatRp(prev) + ')' : ' (' + prev + ')'}</span>`;
-                    } else if (diff < 0) {
-                        return `<span style="color:#FCA5A5;">▼ ${pct}%</span> <span style="opacity:0.6;">vs bulan lalu${isRp ? ' (' + formatRp(prev) + ')' : ' (' + prev + ')'}</span>`;
-                    }
-                    return '<span style="opacity:0.6;">— Sama dengan bulan lalu</span>';
+                    const pct = ((diff) / prev * 100).toFixed(1);
+                    const valStr = isRp ? formatRp(Math.abs(diff)) : Math.abs(diff);
+                    if (diff > 0) return `<span style="color:#4ADE80;">▲ +${pct}% (+${valStr})</span>`;
+                    if (diff < 0) return `<span style="color:#FCA5A5;">▼ ${pct}% (${isRp ? '-' + formatRp(Math.abs(diff)) : diff})</span>`;
+                    return `<span style="opacity:0.6;">— Sama</span>`;
                 }
 
-                document.getElementById('pipelineActiveChange').innerHTML = changeHTML(d.active_bulan_ini, d.active_bulan_lalu, false);
-                document.getElementById('pipelineSuccessChange').innerHTML = changeHTML(d.success_bulan_ini, d.success_bulan_lalu, false);
-                document.getElementById('omzetChange').innerHTML = changeHTML(d.omzet_bulan_ini, d.omzet_bulan_lalu, true);
+                // Pipeline Success compare
+                const successIni = Number(d.success_bulan_ini) || 0;
+                const successLalu = Number(d.success_bulan_lalu) || 0;
+                document.getElementById('pipelineSuccessCompare').innerHTML =
+                    `Bulan ini: <strong>${successIni}</strong> · Bulan lalu: ${successLalu}<br>${compareHTML(successIni, successLalu, false)}`;
 
-                // Active detail breakdown
-                const newC = Number(d.status_new) || 0;
-                const contacted = Number(d.status_contacted) || 0;
-                const followUp = Number(d.status_follow_up) || 0;
+                // Active change
+                document.getElementById('pipelineActiveChange').innerHTML = compareHTML(d.active_bulan_ini, d.active_bulan_lalu, false);
+
+                // Active breakdown
                 document.getElementById('pipelineActiveDetail').innerHTML =
-                    `New: ${newC} · Contacted: ${contacted} · Follow Up: ${followUp}`;
+                    `🔵 New: ${d.status_new || 0}<br>🟡 Contacted: ${d.status_contacted || 0}<br>🟠 Follow Up: ${d.status_follow_up || 0}`;
 
-                // Conversion rate bar
+                // Omzet compare
+                const omzetIni = Number(d.omzet_bulan_ini) || 0;
+                const omzetLalu = Number(d.omzet_bulan_lalu) || 0;
+                document.getElementById('omzetCompare').innerHTML =
+                    `Bulan lalu: ${formatRp(omzetLalu)}<br>${compareHTML(omzetIni, omzetLalu, true)}`;
+
+                // Conversion rate
                 const totalAll = Number(d.total_customers) || 0;
                 const successAll = Number(d.pipeline_success) || 0;
                 const rate = totalAll > 0 ? (successAll / totalAll * 100).toFixed(1) : 0;
                 document.getElementById('conversionRate').textContent = `${rate}%`;
-                document.getElementById('conversionBar').style.width = `${rate}%`;
+                document.getElementById('conversionBar').style.width = `${Math.min(rate, 100)}%`;
             } else {
                 console.warn('⚠️ Failed to load stats');
             }
@@ -844,15 +852,16 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             // Load recent customers
             console.log('📊 Loading recent customers...');
             const customers = await apiCall('/admin/customers');
-            
+
             if (customers && customers.success) {
                 console.log(`✅ Loaded ${customers.data.length} customers`);
-                displayRecentCustomers(customers.data.slice(0, 5));
+                displayRecentCustomers(customers.data.slice(0, 10));
             } else {
-                console.warn('⚠️ Failed to load customers');
+                document.getElementById('recentCustomers').innerHTML = '<div class="no-data">Belum ada customer</div>';
             }
         } catch (error) {
             console.error('❌ Load dashboard error:', error);
+            document.getElementById('recentCustomers').innerHTML = '<div class="no-data">Gagal memuat data</div>';
         }
     }
 
@@ -1626,6 +1635,83 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         }
         return p;
     }
+
+    // ============================================
+    // ============================================
+    // PIPELINE DETAIL MODAL
+    // ============================================
+
+    let pipelineMonthlyData = null;
+
+    window.showPipelineDetail = async function(type) {
+        const modal = document.getElementById('pipelineModal');
+        const title = document.getElementById('pipelineModalTitle');
+        const body = document.getElementById('pipelineModalBody');
+
+        // Load monthly data if not cached
+        if (!pipelineMonthlyData) {
+            body.innerHTML = '<div class="loading">Loading...</div>';
+            modal.classList.add('active');
+            const resp = await apiCall('/admin/pipeline/monthly');
+            if (resp && resp.success) {
+                pipelineMonthlyData = resp.data;
+            } else {
+                body.innerHTML = '<div class="no-data">Gagal memuat data</div>';
+                return;
+            }
+        }
+
+        modal.classList.add('active');
+        const months = pipelineMonthlyData;
+        const formatRp = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+
+        if (type === 'success') {
+            title.textContent = 'Detail Transaksi Sukses Per Bulan';
+            let html = '<table style="width:100%;"><thead><tr><th>Bulan</th><th>Sukses</th><th>Total</th><th>Rate</th><th>Perubahan</th></tr></thead><tbody>';
+            months.forEach((m, i) => {
+                const prev = months[i + 1];
+                const rate = Number(m.total) > 0 ? (Number(m.sukses) / Number(m.total) * 100).toFixed(1) : '0.0';
+                let change = '-';
+                if (prev) {
+                    const diff = Number(m.sukses) - Number(prev.sukses);
+                    if (diff > 0) change = `<span style="color:#16A34A;">▲ +${diff}</span>`;
+                    else if (diff < 0) change = `<span style="color:#DC2626;">▼ ${diff}</span>`;
+                    else change = `<span style="color:#8C8078;">—</span>`;
+                }
+                html += `<tr><td>${m.label}</td><td><strong>${m.sukses}</strong></td><td>${m.total}</td><td>${rate}%</td><td>${change}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            body.innerHTML = html;
+
+        } else if (type === 'omzet') {
+            title.textContent = 'Detail Omzet Per Bulan';
+            let html = '<table style="width:100%;"><thead><tr><th>Bulan</th><th>Omzet</th><th>Transaksi</th><th>Perubahan</th></tr></thead><tbody>';
+            months.forEach((m, i) => {
+                const prev = months[i + 1];
+                const omzet = Number(m.omzet) || 0;
+                let change = '-';
+                if (prev) {
+                    const prevOmzet = Number(prev.omzet) || 0;
+                    const diff = omzet - prevOmzet;
+                    if (prevOmzet > 0) {
+                        const pct = ((diff / prevOmzet) * 100).toFixed(1);
+                        if (diff > 0) change = `<span style="color:#16A34A;">▲ +${pct}% (+${formatRp(diff)})</span>`;
+                        else if (diff < 0) change = `<span style="color:#DC2626;">▼ ${pct}% (${formatRp(diff)})</span>`;
+                        else change = `<span style="color:#8C8078;">—</span>`;
+                    } else if (omzet > 0) {
+                        change = `<span style="color:#16A34A;">▲ Baru</span>`;
+                    }
+                }
+                html += `<tr><td>${m.label}</td><td><strong>${formatRp(omzet)}</strong></td><td>${m.sukses}</td><td>${change}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            body.innerHTML = html;
+        }
+    };
+
+    window.closePipelineModal = function() {
+        document.getElementById('pipelineModal').classList.remove('active');
+    };
 
     // ============================================
     // GOOGLE CONTACTS INTEGRATION
