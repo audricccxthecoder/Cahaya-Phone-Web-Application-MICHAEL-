@@ -86,7 +86,8 @@ exports.handleWhatsAppWebhook = async (req, res) => {
                 await googleService.saveContact({
                     nama_lengkap: customerName,
                     whatsapp: cleanPhone,
-                    source
+                    source,
+                    tipe: 'Chat Only'
                 });
             } catch (gcErr) {
                 console.warn('⚠️ Google Contact save failed:', gcErr.message);

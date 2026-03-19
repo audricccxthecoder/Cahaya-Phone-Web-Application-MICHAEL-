@@ -122,7 +122,8 @@ exports.submitForm = async (req, res) => {
                 merk_unit: merk_unit || null,
                 tipe_unit: tipe_unit || null,
                 metode_pembayaran: metode_pembayaran || null,
-                source
+                source,
+                tipe: 'Belanja'
             });
         } catch (gcError) {
             console.warn('⚠️ Google Contact save failed:', gcError.message || gcError);

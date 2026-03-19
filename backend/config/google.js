@@ -117,10 +117,25 @@ class GoogleContactsService {
             if (phone.startsWith('62')) phone = '+' + phone;
             else if (!phone.startsWith('+')) phone = '+62' + phone;
 
+            // Format tanggal: DD/MM/YYYY
+            const now = new Date();
+            const tanggal = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+
+            // Nama kontak berdasarkan tipe:
+            // Belanja (form submit): "Nama - 20/03/2026"
+            // Chat Only (WA chat): "Nama - Customer 20/03/2026"
+            const tipe = customer.tipe || 'Belanja';
+            let contactName;
+            if (tipe === 'Chat Only') {
+                contactName = `${customer.nama_lengkap} - Customer ${tanggal}`;
+            } else {
+                contactName = `${customer.nama_lengkap} - ${tanggal}`;
+            }
+
             const contactData = {
                 names: [{
-                    givenName: `${customer.nama_lengkap} - CP`,
-                    displayName: `${customer.nama_lengkap} - CP`
+                    givenName: contactName,
+                    displayName: contactName
                 }],
                 phoneNumbers: [{
                     value: phone,
@@ -138,18 +153,17 @@ class GoogleContactsService {
 
             // Add notes with purchase info
             const notes = [];
+            notes.push(`Tipe: ${tipe}`);
             if (customer.merk_unit) notes.push(`Merk: ${customer.merk_unit}`);
-            if (customer.tipe_unit) notes.push(`Tipe: ${customer.tipe_unit}`);
+            if (customer.tipe_unit) notes.push(`Unit: ${customer.tipe_unit}`);
             if (customer.metode_pembayaran) notes.push(`Bayar: ${customer.metode_pembayaran}`);
             if (customer.source) notes.push(`Dari: ${customer.source}`);
-            notes.push(`Daftar: ${new Date().toLocaleDateString('id-ID')}`);
+            notes.push(`Tanggal: ${tanggal}`);
 
-            if (notes.length > 0) {
-                contactData.biographies = [{
-                    value: `[Cahaya Phone Customer]\n${notes.join('\n')}`,
-                    contentType: 'TEXT_PLAIN'
-                }];
-            }
+            contactData.biographies = [{
+                value: `[Cahaya Phone]\n${notes.join('\n')}`,
+                contentType: 'TEXT_PLAIN'
+            }];
 
             const result = await people.people.createContact({
                 requestBody: contactData
