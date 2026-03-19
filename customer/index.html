@@ -6,11 +6,11 @@
     <title>Cahaya Phone — Pendaftaran Customer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Decorative elements -->
+    <!-- Ambient background -->
     <div class="bg-pattern"></div>
     <div class="bg-accent bg-accent-1"></div>
     <div class="bg-accent bg-accent-2"></div>
@@ -18,7 +18,7 @@
     <div class="page-wrapper">
         <!-- Top ribbon -->
         <div class="top-ribbon">
-            <span>Toko HP Terpercaya Sejak 2020</span>
+            <span>&#9670; Toko HP Terpercaya Sejak 2020 &#9670;</span>
         </div>
 
         <div class="container">
@@ -125,7 +125,7 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="harga">Harga (Rp)</label>
+                            <label for="harga">Harga</label>
                             <div class="input-with-prefix">
                                 <span class="input-prefix">Rp</span>
                                 <input type="number" id="harga" name="harga"
@@ -134,7 +134,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="qty">Qty</label>
+                            <label for="qty">Jumlah</label>
                             <input type="number" id="qty" name="qty"
                                    value="1" min="1">
                         </div>
@@ -193,12 +193,21 @@
                 <button type="submit" id="submitBtn" class="submit-btn fade-in">
                     <span class="btn-text">Kirim Data Customer</span>
                     <span class="btn-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="5" y1="12" x2="19" y2="12"/>
                             <polyline points="12 5 19 12 12 19"/>
                         </svg>
                     </span>
                 </button>
+
+                <!-- Trust badge -->
+                <div class="trust-badge">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <span>Data Anda aman & terenkripsi</span>
+                </div>
             </form>
 
             <!-- Footer -->
