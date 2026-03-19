@@ -88,6 +88,11 @@ async function migrate() {
     console.log('Ensuring opted_in column...');
     await client.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS opted_in BOOLEAN DEFAULT TRUE`);
     await client.query(`UPDATE customers SET opted_in = TRUE WHERE opted_in IS NULL`);
+
+    // Ensure tipe column exists (Belanja / Chat Only)
+    console.log('Ensuring tipe column...');
+    await client.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS tipe VARCHAR(20) DEFAULT 'Belanja'`);
+    await client.query(`UPDATE customers SET tipe = 'Belanja' WHERE tipe IS NULL`);
     console.log('✅ opted_in column verified');
 
     // Migrate old status values to new system

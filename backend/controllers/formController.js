@@ -80,8 +80,8 @@ exports.submitForm = async (req, res) => {
         const { rows } = await db.query(
             `INSERT INTO customers (
                 nama_lengkap, nama_sales, merk_unit, tipe_unit, harga, qty,
-                tanggal_lahir, alamat, whatsapp, metode_pembayaran, tahu_dari, source, status, opted_in
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'New', $13)
+                tanggal_lahir, alamat, whatsapp, metode_pembayaran, tahu_dari, source, status, opted_in, tipe
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'New', $13, 'Belanja')
             RETURNING id`,
             [
                 finalName,

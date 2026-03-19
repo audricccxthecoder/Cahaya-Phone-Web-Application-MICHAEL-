@@ -893,6 +893,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                         <th>No</th>
                         <th>Nama</th>
                         <th>WhatsApp</th>
+                        <th>Tipe</th>
                         <th>Sales</th>
                         <th>Produk</th>
                         <th>Harga</th>
@@ -924,11 +925,15 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 return `<option value="${s}" ${selected}>${s}</option>`;
             }).join('');
 
+            const tipe = customer.tipe || 'Belanja';
+            const tipeClass = tipe === 'Belanja' ? 'green' : 'amber';
+
             html += `
                 <tr>
                     <td>${index + 1}</td>
                     <td>${customer.nama_lengkap}</td>
                     <td>${customer.whatsapp}</td>
+                    <td><span class="badge ${tipeClass}">${tipe}</span></td>
                     <td>${customer.nama_sales || '-'}</td>
                     <td>${produk}</td>
                     <td>${harga}</td>
@@ -956,6 +961,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     // Combined filter function
     function applyFilters() {
         const search = document.getElementById('searchCustomer').value.toLowerCase().trim();
+        const tipe = document.getElementById('filterTipe').value;
         const source = document.getElementById('filterSource').value;
         const status = document.getElementById('filterStatus').value;
         const dateFrom = document.getElementById('filterDateFrom').value;
@@ -963,6 +969,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
         let filtered = allCustomers;
         if (search) filtered = filtered.filter(c => c.nama_lengkap.toLowerCase().includes(search));
+        if (tipe) filtered = filtered.filter(c => (c.tipe || 'Belanja') === tipe);
         if (source) filtered = filtered.filter(c => c.source === source);
         if (status) filtered = filtered.filter(c => c.status === status);
         if (dateFrom) filtered = filtered.filter(c => new Date(c.created_at) >= new Date(dateFrom));
@@ -975,6 +982,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     }
 
     document.getElementById('searchCustomer').addEventListener('input', applyFilters);
+    document.getElementById('filterTipe').addEventListener('change', applyFilters);
     document.getElementById('filterSource').addEventListener('change', applyFilters);
     document.getElementById('filterStatus').addEventListener('change', applyFilters);
     document.getElementById('filterDateFrom').addEventListener('change', applyFilters);

@@ -5,6 +5,7 @@
 
 const db = require('../config/database');
 const whatsappService = require('../config/whatsapp');
+const googleService = require('../config/google');
 
 /**
  * Webhook untuk menerima pesan WhatsApp masuk
@@ -68,16 +69,28 @@ exports.handleWhatsAppWebhook = async (req, res) => {
                 source = 'TikTok';
             }
 
+            const customerName = senderName || 'Customer Baru';
             const { rows: inserted } = await db.query(
-                `INSERT INTO customers (nama_lengkap, whatsapp, source, status)
-                VALUES ($1, $2, $3, 'New') RETURNING id`,
-                [senderName || 'Customer Baru', cleanPhone, source]
+                `INSERT INTO customers (nama_lengkap, whatsapp, source, status, tipe)
+                VALUES ($1, $2, $3, 'New', 'Chat Only') RETURNING id`,
+                [customerName, cleanPhone, source]
             );
 
             customerId = inserted[0].id;
             customerStatus = 'New';
 
             console.log(`✅ New customer created from ${source}: ${customerId}`);
+
+            // Auto-save to Google Contacts
+            try {
+                await googleService.saveContact({
+                    nama_lengkap: customerName,
+                    whatsapp: cleanPhone,
+                    source
+                });
+            } catch (gcErr) {
+                console.warn('⚠️ Google Contact save failed:', gcErr.message);
+            }
 
             await whatsappService.sendWelcomeMessage(cleanPhone, senderName);
         }
