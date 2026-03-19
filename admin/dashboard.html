@@ -234,13 +234,16 @@
         <div id="customersPage" class="page">
             <div class="page-header">
                 <h2>Daftar Customer</h2>
-                <div class="page-actions" style="flex-wrap:wrap;">
+            </div>
+
+            <!-- Tabs Belanja / Tidak Belanja -->
+            <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #EDE8E3;">
+                <button id="tabBelanja" class="customer-tab active" onclick="switchCustomerTab('Belanja')" style="padding:10px 24px;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid #B91C1C;color:#B91C1C;margin-bottom:-2px;">Belanja</button>
+                <button id="tabChatOnly" class="customer-tab" onclick="switchCustomerTab('Chat Only')" style="padding:10px 24px;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;color:#8C8078;margin-bottom:-2px;">Tidak Belanja</button>
+            </div>
+
+            <div class="page-actions" style="flex-wrap:wrap;margin-bottom:16px;">
                     <input type="text" id="searchCustomer" placeholder="Cari customer..." class="search-input">
-                    <select id="filterTipe" class="filter-select">
-                        <option value="">Semua Tipe</option>
-                        <option value="Belanja">Belanja</option>
-                        <option value="Chat Only">Chat Only</option>
-                    </select>
                     <select id="filterSource" class="filter-select">
                         <option value="">Semua Source</option>
                         <option value="Website">Website</option>

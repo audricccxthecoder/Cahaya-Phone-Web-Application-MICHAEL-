@@ -885,80 +885,77 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         }
     }
 
+    let activeTab = 'Belanja';
+
+    window.switchCustomerTab = function(tab) {
+        activeTab = tab;
+        // Update tab styles
+        const tabBelanja = document.getElementById('tabBelanja');
+        const tabChatOnly = document.getElementById('tabChatOnly');
+        if (tab === 'Belanja') {
+            tabBelanja.style.borderBottomColor = '#B91C1C';
+            tabBelanja.style.color = '#B91C1C';
+            tabChatOnly.style.borderBottomColor = 'transparent';
+            tabChatOnly.style.color = '#8C8078';
+        } else {
+            tabChatOnly.style.borderBottomColor = '#B91C1C';
+            tabChatOnly.style.color = '#B91C1C';
+            tabBelanja.style.borderBottomColor = 'transparent';
+            tabBelanja.style.color = '#8C8078';
+        }
+        applyFilters();
+    };
+
     function displayCustomers(customers) {
         const container = document.getElementById('customersTable');
-        
+
         if (customers.length === 0) {
             container.innerHTML = '<div class="no-data">Belum ada customer</div>';
             return;
         }
 
-        let html = `
-            <table>
-                <thead>
-                    <tr>
-                        <th>No</th>
-                        <th>Nama</th>
-                        <th>WhatsApp</th>
-                        <th>Tipe</th>
-                        <th>Sales</th>
-                        <th>Produk</th>
-                        <th>Harga</th>
-                        <th>Metode</th>
-                        <th>Source</th>
-                        <th>Status</th>
-                        <th>Tanggal</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        const isBelanja = activeTab === 'Belanja';
 
-        const validStatuses = ['New', 'Contacted', 'Follow Up', 'Completed', 'Inactive'];
+        let html = `<table><thead><tr>
+            <th>No</th>
+            <th>Nama</th>
+            <th>WhatsApp</th>`;
+
+        if (isBelanja) {
+            html += `<th>Sales</th><th>Produk</th><th>Harga</th><th>Metode</th>`;
+        }
+
+        html += `<th>Source</th><th>Status</th><th>Tanggal</th><th>Aksi</th>
+            </tr></thead><tbody>`;
 
         customers.forEach((customer, index) => {
             const date = new Date(customer.created_at).toLocaleDateString('id-ID');
             const sourceClass = String(customer.source || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
             const statusClass = String(customer.status || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
-            const produk = customer.merk_unit && customer.tipe_unit
-                ? `${customer.merk_unit} ${customer.tipe_unit}`
-                : '-';
-            const harga = customer.harga
-                ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(customer.harga)
-                : '-';
 
-            const statusOptions = validStatuses.map(s => {
-                const selected = customer.status === s ? 'selected' : '';
-                return `<option value="${s}" ${selected}>${s}</option>`;
-            }).join('');
+            html += `<tr>
+                <td>${index + 1}</td>
+                <td>${customer.nama_lengkap}</td>
+                <td>${customer.whatsapp}</td>`;
 
-            const tipe = customer.tipe || 'Belanja';
-            const tipeClass = tipe === 'Belanja' ? 'green' : 'amber';
-
-            html += `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td>${customer.nama_lengkap}</td>
-                    <td>${customer.whatsapp}</td>
-                    <td><span class="badge ${tipeClass}">${tipe}</span></td>
-                    <td>${customer.nama_sales || '-'}</td>
+            if (isBelanja) {
+                const produk = customer.merk_unit && customer.tipe_unit
+                    ? `${customer.merk_unit} ${customer.tipe_unit}` : '-';
+                const harga = customer.harga
+                    ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(customer.harga) : '-';
+                html += `<td>${customer.nama_sales || '-'}</td>
                     <td>${produk}</td>
                     <td>${harga}</td>
-                    <td>${customer.metode_pembayaran || '-'}</td>
-                    <td><span class="badge ${sourceClass}">${customer.source}</span></td>
-                    <td>
-                        <select class="status-select ${statusClass}" onchange="updateStatus(${customer.id}, this.value, this)">
-                            ${statusOptions}
-                        </select>
-                    </td>
-                    <td>${date}</td>
-                    <td>
-                        <div class="table-actions">
-                            <button class="btn-small" onclick="viewCustomer(${customer.id})">Detail</button>
-                        </div>
-                    </td>
-                </tr>
-            `;
+                    <td>${customer.metode_pembayaran || '-'}</td>`;
+            }
+
+            html += `<td><span class="badge ${sourceClass}">${customer.source}</span></td>
+                <td><span class="badge ${statusClass}">${customer.status}</span></td>
+                <td>${date}</td>
+                <td><div class="table-actions">
+                    <button class="btn-small" onclick="viewCustomer(${customer.id})">Detail</button>
+                </div></td>
+            </tr>`;
         });
 
         html += '</tbody></table>';
@@ -968,15 +965,14 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     // Combined filter function
     function applyFilters() {
         const search = document.getElementById('searchCustomer').value.toLowerCase().trim();
-        const tipe = document.getElementById('filterTipe').value;
         const source = document.getElementById('filterSource').value;
         const status = document.getElementById('filterStatus').value;
         const dateFrom = document.getElementById('filterDateFrom').value;
         const dateTo = document.getElementById('filterDateTo').value;
 
-        let filtered = allCustomers;
+        // Filter by active tab
+        let filtered = allCustomers.filter(c => (c.tipe || 'Belanja') === activeTab);
         if (search) filtered = filtered.filter(c => c.nama_lengkap.toLowerCase().includes(search));
-        if (tipe) filtered = filtered.filter(c => (c.tipe || 'Belanja') === tipe);
         if (source) filtered = filtered.filter(c => c.source === source);
         if (status) filtered = filtered.filter(c => c.status === status);
         if (dateFrom) filtered = filtered.filter(c => new Date(c.created_at) >= new Date(dateFrom));
@@ -989,32 +985,12 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     }
 
     document.getElementById('searchCustomer').addEventListener('input', applyFilters);
-    document.getElementById('filterTipe').addEventListener('change', applyFilters);
     document.getElementById('filterSource').addEventListener('change', applyFilters);
     document.getElementById('filterStatus').addEventListener('change', applyFilters);
     document.getElementById('filterDateFrom').addEventListener('change', applyFilters);
     document.getElementById('filterDateTo').addEventListener('change', applyFilters);
 
-    // Update customer status
-    window.updateStatus = async function(customerId, newStatus, selectEl) {
-        const result = await apiCall(`/admin/customers/${customerId}/status`, {
-            method: 'PATCH',
-            body: JSON.stringify({ status: newStatus })
-        });
-        if (result && result.success) {
-            // Update local cache
-            const cust = allCustomers.find(c => c.id === customerId);
-            if (cust) cust.status = newStatus;
-            // Update select styling
-            const statusClass = newStatus.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-            selectEl.className = 'status-select ' + statusClass;
-        } else {
-            alert('Gagal update status: ' + (result?.message || 'Unknown error'));
-            // Revert select
-            const cust = allCustomers.find(c => c.id === customerId);
-            if (cust) selectEl.value = cust.status;
-        }
-    };
+    // Status is now fully automatic — no manual update needed
 
     // View customer detail
     window.viewCustomer = async function(customerId) {

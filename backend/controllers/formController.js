@@ -77,28 +77,46 @@ exports.submitForm = async (req, res) => {
         // opted_in defaults to true if not explicitly set to false
         const optedIn = opted_in !== false;
 
-        const { rows } = await db.query(
-            `INSERT INTO customers (
-                nama_lengkap, nama_sales, merk_unit, tipe_unit, harga, qty,
-                tanggal_lahir, alamat, whatsapp, metode_pembayaran, tahu_dari, source, status, opted_in, tipe
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Completed', $13, 'Belanja')
-            RETURNING id`,
-            [
-                finalName,
-                nama_sales || null,
-                merk_unit || null,
-                tipe_unit || null,
-                parsedHarga,
-                parsedQty,
-                tanggal_lahir || null,
-                fullAddress,
-                cleanPhone,
-                metode_pembayaran || null,
-                tahu_dari || null,
-                source,
-                optedIn
-            ]
+        // Check if this phone exists as Chat Only → upgrade to Belanja
+        const { rows: existingChat } = await db.query(
+            `SELECT id FROM customers WHERE whatsapp = $1 AND tipe = 'Chat Only' ORDER BY created_at DESC LIMIT 1`,
+            [cleanPhone]
         );
+
+        let rows;
+        if (existingChat.length > 0) {
+            // Upgrade Chat Only → Belanja with full data
+            const result = await db.query(
+                `UPDATE customers SET
+                    nama_lengkap = $1, nama_sales = $2, merk_unit = $3, tipe_unit = $4,
+                    harga = $5, qty = $6, tanggal_lahir = $7, alamat = $8,
+                    metode_pembayaran = $9, tahu_dari = $10, source = $11,
+                    status = 'Completed', opted_in = $12, tipe = 'Belanja', updated_at = NOW()
+                WHERE id = $13 RETURNING id`,
+                [
+                    finalName, nama_sales || null, merk_unit || null, tipe_unit || null,
+                    parsedHarga, parsedQty, tanggal_lahir || null, fullAddress,
+                    metode_pembayaran || null, tahu_dari || null, source,
+                    optedIn, existingChat[0].id
+                ]
+            );
+            rows = result.rows;
+        } else {
+            // New customer
+            const result = await db.query(
+                `INSERT INTO customers (
+                    nama_lengkap, nama_sales, merk_unit, tipe_unit, harga, qty,
+                    tanggal_lahir, alamat, whatsapp, metode_pembayaran, tahu_dari, source, status, opted_in, tipe
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Completed', $13, 'Belanja')
+                RETURNING id`,
+                [
+                    finalName, nama_sales || null, merk_unit || null, tipe_unit || null,
+                    parsedHarga, parsedQty, tanggal_lahir || null, fullAddress,
+                    cleanPhone, metode_pembayaran || null, tahu_dari || null, source, optedIn
+                ]
+            );
+            rows = result.rows;
+        }
 
         const customerId = rows[0].id;
 
