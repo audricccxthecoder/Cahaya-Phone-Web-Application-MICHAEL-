@@ -740,7 +740,6 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
     async function apiCall(endpoint, options = {}) {
         try {
-            console.log(`📡 API Call: ${endpoint}`);
             const response = await fetch(`${API_URL}${endpoint}`, {
                 ...options,
                 headers: {
@@ -750,19 +749,14 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 }
             });
 
-            console.log(`📨 Response status: ${response.status}`);
-
             if (response.status === 401) {
-                console.warn('⚠️ Unauthorized, logging out...');
                 logout();
                 return null;
             }
 
-            const result = await response.json();
-            console.log(`✅ API Response:`, result);
-            return result;
+            return await response.json();
         } catch (error) {
-            console.error('❌ API call error:', error);
+            console.error('API error:', error);
             return null;
         }
     }
@@ -917,18 +911,24 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         const container = document.getElementById('customersTable');
         container.innerHTML = '<div class="loading">Loading...</div>';
 
-        console.log('📋 Loading all customers...');
         const result = await apiCall('/admin/customers');
-        
+
         if (result && result.success) {
-            console.log(`✅ Loaded ${result.data.length} customers`);
             allCustomers = result.data;
-            displayCustomers(allCustomers);
+            applyFilters();
         } else {
-            console.error('❌ Failed to load customers');
-            container.innerHTML = '<div class="no-data">Gagal memuat data. Pastikan backend jalan!</div>';
+            container.innerHTML = '<div class="no-data">Gagal memuat data</div>';
         }
     }
+
+    window.refreshCustomers = async function() {
+        await loadCustomers();
+    };
+
+    window.refreshDashboard = async function() {
+        pipelineMonthlyData = null;
+        await loadDashboard();
+    };
 
     let activeTab = 'Belanja';
     let currentPage = 1;

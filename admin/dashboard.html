@@ -40,7 +40,13 @@
             <div class="card" style="margin-bottom:20px;padding:24px;background:linear-gradient(135deg,#B91C1C 0%,#8B0000 100%);color:#fff;border:none;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
                     <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:#fff;margin:0;">Pipeline Overview</h3>
-                    <div style="font-size:11px;opacity:0.7;" id="pipelinePeriod"></div>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:11px;opacity:0.7;" id="pipelinePeriod"></span>
+                        <button onclick="refreshDashboard()" style="padding:4px 10px;border:1px solid rgba(255,255,255,0.3);border-radius:6px;background:rgba(255,255,255,0.1);color:#fff;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;" title="Refresh data">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            Refresh
+                        </button>
+                    </div>
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
                     <!-- Pipeline Active -->
@@ -238,12 +244,16 @@
 
         <!-- Customers Page -->
         <div id="customersPage" class="page">
-            <div class="page-header"></div>
-
-            <!-- Tabs Belanja / Tidak Belanja -->
-            <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #EDE8E3;">
-                <button id="tabBelanja" class="customer-tab active" onclick="switchCustomerTab('Belanja')" style="padding:10px 24px;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid #B91C1C;color:#B91C1C;margin-bottom:-2px;">Belanja</button>
-                <button id="tabChatOnly" class="customer-tab" onclick="switchCustomerTab('Chat Only')" style="padding:10px 24px;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;color:#8C8078;margin-bottom:-2px;">Tidak Belanja</button>
+            <!-- Tabs Belanja / Tidak Belanja + Refresh -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;border-bottom:2px solid #EDE8E3;">
+                <div style="display:flex;gap:0;">
+                    <button id="tabBelanja" class="customer-tab active" onclick="switchCustomerTab('Belanja')" style="padding:10px 24px;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid #B91C1C;color:#B91C1C;margin-bottom:-2px;">Belanja</button>
+                    <button id="tabChatOnly" class="customer-tab" onclick="switchCustomerTab('Chat Only')" style="padding:10px 24px;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;color:#8C8078;margin-bottom:-2px;">Tidak Belanja</button>
+                </div>
+                <button onclick="refreshCustomers()" style="padding:6px 14px;border:1px solid #EDE8E3;border-radius:6px;background:#fff;color:#5C534B;cursor:pointer;font-size:13px;margin-bottom:-2px;display:flex;align-items:center;gap:5px;" title="Refresh data">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8078" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    Refresh
+                </button>
             </div>
 
             <div class="page-actions" style="flex-wrap:wrap;margin-bottom:16px;">
