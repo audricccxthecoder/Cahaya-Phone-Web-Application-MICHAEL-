@@ -188,10 +188,10 @@ async function migrate() {
 
       await client.query(
         'INSERT INTO admins (username, password, nama, email) VALUES ($1, $2, $3, $4)',
-        ['admin', hashedPassword, 'Administrator', 'admin@localhost']
+        ['superadmin', hashedPassword, 'Super Admin', 'admin@localhost']
       );
       console.log('✅ Default admin created');
-      console.log('   Username: admin');
+      console.log('   Username: superadmin');
       console.log('   Password: admin123');
       console.log('   ⚠️  PLEASE CHANGE THIS PASSWORD AFTER FIRST LOGIN!');
     } else {

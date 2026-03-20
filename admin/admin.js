@@ -577,129 +577,14 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         window.location.href = 'index.html';
     }
 
-    // Display admin name (click to edit)
+    // Display admin greeting
     function renderAdminName() {
-        document.getElementById('adminName').textContent = `Hello, ${admin.nama || 'Admin'}`;
+        const name = admin.nama || admin.username || 'Admin';
+        document.getElementById('adminName').textContent = `Welcome back, ${name}`;
     }
 
     renderAdminName();
-    console.log('👤 Admin:', admin.nama || 'Admin');
-
-    // Edit admin name button -> open profile modal
-    const editBtn = document.getElementById('editAdminNameBtn');
-    if (editBtn) {
-        editBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            // Populate form (display name + username)
-            document.getElementById('adminDisplayName').value = admin.nama || '';
-            document.getElementById('adminUsername').value = admin.username || '';
-            document.getElementById('adminCurrentPassword').value = '';
-            document.getElementById('adminNewPassword').value = '';
-
-            document.getElementById('adminProfileModal').classList.add('show');
-        });
-    }
-
-    window.closeAdminModal = function() {
-        document.getElementById('adminProfileModal').classList.remove('show');
-    };
-
-    // Handle profile form submit (name-only OR credentials)
-    document.getElementById('adminProfileForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const displayName = document.getElementById('adminDisplayName').value.trim();
-        const username = document.getElementById('adminUsername').value.trim();
-        const currentPassword = document.getElementById('adminCurrentPassword').value;
-        const newPassword = document.getElementById('adminNewPassword').value;
-        const alertEl = document.getElementById('adminProfileAlert');
-
-        alertEl.className = 'alert';
-
-        // If username or newPassword present, require currentPassword
-        const wantsCredsChange = (username && username !== (admin.username || '')) || newPassword;
-
-        if (wantsCredsChange && !currentPassword) {
-            alertEl.textContent = 'Current password is required to change username or password.';
-            alertEl.classList.add('error','show');
-            return;
-        }
-
-        // No changes
-        if (!wantsCredsChange && (displayName === (admin.nama || ''))) {
-            alertEl.textContent = 'No changes detected.';
-            alertEl.classList.add('info','show');
-            setTimeout(() => { alertEl.classList.remove('show'); }, 1200);
-            return;
-        }
-
-        // If only name changed, call /admin/profile
-        if (!wantsCredsChange) {
-            if (!displayName) {
-                alertEl.textContent = 'Display name cannot be empty.';
-                alertEl.classList.add('error','show');
-                return;
-            }
-
-            const res = await apiCall('/admin/profile', {
-                method: 'PATCH',
-                body: JSON.stringify({ nama: displayName })
-            });
-
-            if (res && res.success) {
-                admin.nama = res.data.nama || admin.nama;
-                localStorage.setItem('admin', JSON.stringify(admin));
-                renderAdminName();
-
-                alertEl.textContent = 'Display name updated.';
-                alertEl.classList.add('success','show');
-                setTimeout(() => {
-                    document.getElementById('adminProfileModal').classList.remove('show');
-                    alertEl.classList.remove('show');
-                }, 1200);
-            } else {
-                const msg = (res && res.message) ? res.message : 'Failed to update display name.';
-                alertEl.textContent = msg;
-                alertEl.classList.add('error','show');
-            }
-
-            return;
-        }
-
-        // Otherwise, change credentials via /admin/credentials
-        const payload = { current_password: currentPassword };
-        if (username && username !== (admin.username || '')) payload.new_username = username;
-        if (newPassword) payload.new_password = newPassword;
-        if (displayName) payload.nama = displayName;
-
-        const res2 = await apiCall('/admin/credentials', {
-            method: 'PATCH',
-            body: JSON.stringify(payload)
-        });
-
-        if (res2 && res2.success) {
-            // Update token if provided
-            if (res2.token) {
-                localStorage.setItem('token', res2.token);
-            }
-            if (res2.data) {
-                admin.nama = res2.data.nama || admin.nama;
-                admin.username = res2.data.username || admin.username;
-                localStorage.setItem('admin', JSON.stringify(admin));
-                renderAdminName();
-            }
-
-            alertEl.textContent = 'Credentials updated successfully.';
-            alertEl.classList.add('success','show');
-            setTimeout(() => {
-                document.getElementById('adminProfileModal').classList.remove('show');
-                alertEl.classList.remove('show');
-            }, 1200);
-        } else {
-            const msg = (res2 && res2.message) ? res2.message : 'Failed to update credentials.';
-            alertEl.textContent = msg;
-            alertEl.classList.add('error','show');
-        }
-    });
+    console.log('👤 Admin:', admin.nama || admin.username || 'Admin');
 
     // ============================================
     // NAVIGATION
@@ -1003,7 +888,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             html += `<tr>
                 <td>${start + index + 1}</td>
                 <td>${customer.nama_lengkap}${repeatBadge}</td>
-                <td>${customer.whatsapp}</td>`;
+                <td style="white-space:nowrap;">${customer.whatsapp} <a href="https://wa.me/${customer.whatsapp}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;background:#25D366;color:#fff;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;vertical-align:middle;margin-left:4px;" title="Chat WhatsApp">WA</a></td>`;
 
             if (isBelanja) {
                 const produk = customer.merk_unit && customer.tipe_unit
@@ -1162,7 +1047,10 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 </div>
                 <div class="detail-group">
                     <div class="detail-label">WhatsApp</div>
-                    <div class="detail-value">${customer.whatsapp}</div>
+                    <div class="detail-value" style="display:flex;align-items:center;gap:8px;">
+                        ${customer.whatsapp}
+                        <a href="https://wa.me/${customer.whatsapp}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:#25D366;color:#fff;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Chat</a>
+                    </div>
                 </div>
                 <div class="detail-group">
                     <div class="detail-label">Tanggal Lahir</div>

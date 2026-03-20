@@ -15,9 +15,8 @@
         <div class="header-content">
             <h1>Cahaya Phone Database</h1>
             <div class="header-actions">
-                <span id="adminName" class="admin-name" title="Klik untuk ganti nama" style="cursor:pointer;"></span>
-                <button id="editAdminNameBtn" class="btn-small" title="Ubah nama">Edit</button>
-                <button onclick="logout()" class="btn-logout">Logout</button>
+                <span id="adminName" class="admin-name"></span>
+                <button onclick="logout()" class="btn-logout" style="padding:8px 18px;font-size:12px;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">Logout</button>
             </div>
         </div>
     </header>
@@ -452,41 +451,6 @@
             </div>
             <div id="customerDetail" class="modal-body">
                 <!-- Will be filled by JavaScript -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Admin Profile Modal -->
-    <div id="adminProfileModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Edit Admin Profile</h3>
-                <button class="modal-close" onclick="closeAdminModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="adminProfileForm">
-                    <div class="form-group">
-                        <label>Display Name</label>
-                        <input type="text" id="adminDisplayName" />
-                        <small class="muted">Hanya untuk mengubah nama tampilan; untuk mengganti username/password, isi field di bawah dan sertakan current password.</small>
-                    </div>
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" id="adminUsername" />
-                    </div>
-                    <div class="form-group">
-                        <label>Current Password (required if changing username or password)</label>
-                        <input type="password" id="adminCurrentPassword" autocomplete="current-password" />
-                    </div>
-                    <div class="form-group">
-                        <label>New Password (leave blank to keep)</label>
-                        <input type="password" id="adminNewPassword" autocomplete="new-password" />
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary">Save Changes</button>
-                    </div>
-                </form>
-                <div id="adminProfileAlert" class="alert"></div>
             </div>
         </div>
     </div>
