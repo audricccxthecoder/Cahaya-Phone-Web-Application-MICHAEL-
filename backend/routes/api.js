@@ -9,6 +9,7 @@ const router = express.Router();
 const formController = require('../controllers/formController');
 const webhookController = require('../controllers/webhookController');
 const adminController = require('../controllers/adminController');
+const invoiceController = require('../controllers/invoiceController');
 const googleController = require('../controllers/googleController');
 
 // Middleware
@@ -35,6 +36,9 @@ router.get('/google/auth', googleController.authorize);
 router.get('/google/callback', googleController.callback);
 router.get('/google/status', authMiddleware, googleController.status);
 router.post('/google/disconnect', authMiddleware, googleController.disconnect);
+
+// Public invoice view (no auth)
+router.get('/nota/:token', invoiceController.getInvoicePublic);
 
 // Admin login
 router.post('/admin/login', adminController.login);
@@ -68,6 +72,13 @@ router.get('/admin/customers/export/vcf', authMiddleware, adminController.export
 router.patch('/admin/customers/:id/status', authMiddleware, adminController.updateCustomerStatus);
 router.patch('/admin/customers/:id/catatan', authMiddleware, adminController.updateCustomerCatatan);
 router.get('/admin/customers/:id', authMiddleware, adminController.getCustomerById);
+
+// Invoices (Nota Digital)
+router.get('/admin/invoices', authMiddleware, invoiceController.getInvoices);
+router.post('/admin/invoices', authMiddleware, invoiceController.createInvoice);
+router.post('/admin/invoices/from-purchase', authMiddleware, invoiceController.createFromPurchase);
+router.get('/admin/invoices/:id', authMiddleware, invoiceController.getInvoiceById);
+router.delete('/admin/invoices/:id', authMiddleware, invoiceController.deleteInvoice);
 
 // Messages
 router.get('/admin/messages', authMiddleware, adminController.getMessages);

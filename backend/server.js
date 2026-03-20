@@ -20,6 +20,7 @@ app.use(cors({
 // Serve static frontend files
 app.use('/customer', express.static(path.join(__dirname, '../customer')));
 app.use('/admin', express.static(path.join(__dirname, '../admin')));
+app.use('/nota', express.static(path.join(__dirname, '../nota')));
 
 // Health check + redirect ke customer form
 app.get('/', (req, res) => {

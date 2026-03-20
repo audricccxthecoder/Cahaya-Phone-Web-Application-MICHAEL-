@@ -105,6 +105,28 @@ async function migrate() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases (created_at)`);
     console.log('✅ Table purchases created/verified');
 
+    // Buat tabel invoices (nota digital)
+    console.log('Creating table: invoices...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id SERIAL PRIMARY KEY,
+        invoice_number VARCHAR(50) UNIQUE NOT NULL,
+        token VARCHAR(64) UNIQUE NOT NULL,
+        customer_id INT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+        purchase_id INT REFERENCES purchases(id) ON DELETE SET NULL,
+        items JSONB NOT NULL DEFAULT '[]',
+        subtotal NUMERIC(15,2) DEFAULT 0,
+        diskon NUMERIC(15,2) DEFAULT 0,
+        total NUMERIC(15,2) DEFAULT 0,
+        metode_pembayaran VARCHAR(50),
+        catatan TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_invoices_customer ON invoices (customer_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_invoices_token ON invoices (token)`);
+    console.log('✅ Table invoices created/verified');
+
     // Ensure opted_in column exists and backfill NULLs
     console.log('Ensuring opted_in column...');
     await client.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS opted_in BOOLEAN DEFAULT TRUE`);
@@ -214,12 +236,14 @@ async function migrate() {
     const { rows: ac } = await client.query('SELECT COUNT(*) as count FROM admins');
     const { rows: mc } = await client.query('SELECT COUNT(*) as count FROM messages');
     const { rows: pc } = await client.query('SELECT COUNT(*) as count FROM purchases');
+    const { rows: ic } = await client.query('SELECT COUNT(*) as count FROM invoices');
 
     console.log('\n📊 Database Summary:');
     console.log(`   Customers: ${cc[0].count}`);
     console.log(`   Admins: ${ac[0].count}`);
     console.log(`   Messages: ${mc[0].count}`);
     console.log(`   Purchases: ${pc[0].count}`);
+    console.log(`   Invoices: ${ic[0].count}`);
     console.log('\n✅ Migration completed successfully!');
 
   } catch (error) {

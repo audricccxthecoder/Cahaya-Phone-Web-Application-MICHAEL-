@@ -615,6 +615,8 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 loadCustomers();
             } else if (targetPage === 'analytics') {
                 loadAnalytics();
+            } else if (targetPage === 'invoices') {
+                loadInvoices();
             } else if (targetPage === 'messages') {
                 loadMessages();
             }
@@ -1065,7 +1067,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                             <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Produk</th>
                             <th style="text-align:right;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Harga</th>
                             <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Sales</th>
-                            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Metode</th>
+                            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Nota</th>
                         </tr></thead>
                         <tbody>
                             ${purchases.map(p => `
@@ -1074,7 +1076,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-weight:500;">${(p.merk_unit || '') + (p.tipe_unit ? ' ' + p.tipe_unit : '') || '-'}</td>
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;text-align:right;">${p.harga ? formatRpDetail(p.harga) : '-'}</td>
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${p.nama_sales || '-'}</td>
-                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${p.metode_pembayaran || '-'}</td>
+                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;"><button class="btn-small" onclick="createInvoiceFromPurchase(${p.id})" style="font-size:11px;padding:4px 10px;">Buat Nota</button></td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -1524,6 +1526,252 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         if (res && res.status) renderBroadcastStatus(res.status);
     });
 
+
+    // ============================================
+    // INVOICES (NOTA DIGITAL)
+    // ============================================
+
+    let allInvoices = [];
+
+    async function loadInvoices() {
+        const container = document.getElementById('invoicesTable');
+        container.innerHTML = '<div class="loading">Loading...</div>';
+        try {
+            const result = await apiCall('/admin/invoices');
+            if (result && result.success) {
+                allInvoices = result.data;
+                displayInvoices(result.data);
+            } else {
+                container.innerHTML = '<div class="no-data">Belum ada nota</div>';
+            }
+        } catch (e) {
+            container.innerHTML = '<div class="no-data">Gagal memuat nota</div>';
+        }
+    }
+
+    window.refreshInvoices = loadInvoices;
+
+    function displayInvoices(invoices) {
+        const container = document.getElementById('invoicesTable');
+        if (invoices.length === 0) {
+            container.innerHTML = '<div class="no-data">Belum ada nota</div>';
+            return;
+        }
+
+        const formatRpInv = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+
+        let html = `<table><thead><tr>
+            <th>No. Nota</th>
+            <th>Customer</th>
+            <th>Total</th>
+            <th>Metode</th>
+            <th>Tanggal</th>
+            <th>Aksi</th>
+        </tr></thead><tbody>`;
+
+        invoices.forEach(inv => {
+            const date = new Date(inv.created_at).toLocaleDateString('id-ID');
+            const notaUrl = `${window.location.origin}/nota/?t=${inv.token}`;
+            const waText = encodeURIComponent(`Halo ${inv.nama_lengkap}, terima kasih sudah belanja di *Cahaya Phone*! Berikut nota pembelian Anda:\n\n${notaUrl}\n\nSimpan sebagai bukti pembelian. Terima kasih!`);
+            const waLink = `https://wa.me/${inv.whatsapp}?text=${waText}`;
+
+            html += `<tr>
+                <td style="font-weight:600;font-size:13px;">${inv.invoice_number}</td>
+                <td>${inv.nama_lengkap}</td>
+                <td style="font-weight:600;">${formatRpInv(inv.total)}</td>
+                <td>${inv.metode_pembayaran || '-'}</td>
+                <td>${date}</td>
+                <td>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <button class="btn-small" onclick="previewInvoice(${inv.id})" style="font-size:11px;padding:6px 10px;">Lihat</button>
+                        <a href="${waLink}" target="_blank" rel="noopener" class="btn-small" style="font-size:11px;padding:6px 10px;background:#25D366;color:#fff;border-color:#25D366;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">Kirim WA</a>
+                        <button class="btn-small" onclick="copyNotaLink('${inv.token}')" style="font-size:11px;padding:6px 10px;">Copy Link</button>
+                        <button class="btn-small" onclick="deleteInvoice(${inv.id})" style="font-size:11px;padding:6px 10px;color:#DC2626;border-color:rgba(220,38,38,0.2);">Hapus</button>
+                    </div>
+                </td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    window.previewInvoice = async function(id) {
+        const result = await apiCall(`/admin/invoices/${id}`);
+        if (!result || !result.success) return alert('Gagal memuat nota');
+
+        const inv = result.data;
+        const items = typeof inv.items === 'string' ? JSON.parse(inv.items) : inv.items;
+        const formatRpInv = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+        const notaUrl = `${window.location.origin}/nota/?t=${inv.token}`;
+
+        let itemsHtml = items.map(item =>
+            `<tr><td style="padding:8px 0;border-bottom:1px solid #F5F3F0;">${item.nama}</td>
+             <td style="padding:8px 0;border-bottom:1px solid #F5F3F0;text-align:center;">${item.qty || 1}</td>
+             <td style="padding:8px 0;border-bottom:1px solid #F5F3F0;text-align:right;">${formatRpInv((item.harga || 0) * (item.qty || 1))}</td></tr>`
+        ).join('');
+
+        let diskonHtml = Number(inv.diskon) > 0 ? `<div style="display:flex;justify-content:space-between;color:#16A34A;font-size:14px;"><span>Diskon</span><span>- ${formatRpInv(inv.diskon)}</span></div>` : '';
+
+        const body = document.getElementById('invoicePreviewBody');
+        body.innerHTML = `
+            <div style="text-align:center;margin-bottom:16px;">
+                <h2 style="font-family:'Playfair Display',serif;color:#B91C1C;margin:0;">Cahaya Phone</h2>
+                <p style="font-size:12px;color:#8C8078;">Gorontalo</p>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:13px;">
+                <div><span style="color:#8C8078;">No. Nota:</span><br><strong>${inv.invoice_number}</strong></div>
+                <div><span style="color:#8C8078;">Tanggal:</span><br><strong>${new Date(inv.created_at).toLocaleDateString('id-ID')}</strong></div>
+                <div><span style="color:#8C8078;">Customer:</span><br><strong>${inv.nama_lengkap}</strong></div>
+                <div><span style="color:#8C8078;">WhatsApp:</span><br><strong>${inv.whatsapp}</strong></div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">
+                <thead><tr>
+                    <th style="text-align:left;padding:8px 0;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">PRODUK</th>
+                    <th style="text-align:center;padding:8px 0;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">QTY</th>
+                    <th style="text-align:right;padding:8px 0;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">HARGA</th>
+                </tr></thead>
+                <tbody>${itemsHtml}</tbody>
+            </table>
+            <div style="display:flex;justify-content:space-between;font-size:14px;color:#5C534B;"><span>Subtotal</span><span>${formatRpInv(inv.subtotal)}</span></div>
+            ${diskonHtml}
+            <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:#B91C1C;border-top:2px solid #1A1412;margin-top:8px;padding-top:12px;"><span>Total</span><span>${formatRpInv(inv.total)}</span></div>
+            ${inv.metode_pembayaran ? `<div style="margin-top:12px;font-size:13px;color:#8C8078;">Metode: <span style="background:rgba(185,28,28,0.08);color:#B91C1C;padding:2px 10px;border-radius:6px;font-weight:600;">${inv.metode_pembayaran}</span></div>` : ''}
+            ${inv.catatan ? `<div style="margin-top:8px;font-size:13px;color:#5C534B;font-style:italic;">${inv.catatan}</div>` : ''}
+            <div style="margin-top:16px;display:flex;gap:8px;">
+                <a href="https://wa.me/${inv.whatsapp}?text=${encodeURIComponent(`Halo ${inv.nama_lengkap}, terima kasih sudah belanja di *Cahaya Phone*! Berikut nota pembelian Anda:\n\n${notaUrl}\n\nSimpan sebagai bukti pembelian. Terima kasih!`)}" target="_blank" rel="noopener" class="btn-primary" style="width:auto;padding:10px 20px;background:#25D366;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px;">Kirim via WA</a>
+                <button onclick="copyNotaLink('${inv.token}')" class="btn-small" style="padding:10px 16px;">Copy Link</button>
+                <a href="${notaUrl}" target="_blank" rel="noopener" class="btn-small" style="padding:10px 16px;text-decoration:none;">Buka Nota</a>
+            </div>
+        `;
+
+        document.getElementById('invoicePreviewModal').classList.add('show');
+    };
+
+    window.closeInvoicePreview = function() {
+        document.getElementById('invoicePreviewModal').classList.remove('show');
+    };
+
+    window.copyNotaLink = function(token) {
+        const url = `${window.location.origin}/nota/?t=${token}`;
+        navigator.clipboard.writeText(url).then(() => {
+            alert('Link nota berhasil dicopy!');
+        }).catch(() => {
+            prompt('Copy link ini:', url);
+        });
+    };
+
+    window.deleteInvoice = async function(id) {
+        if (!confirm('Hapus nota ini?')) return;
+        const result = await apiCall(`/admin/invoices/${id}`, { method: 'DELETE' });
+        if (result && result.success) {
+            loadInvoices();
+        } else {
+            alert('Gagal menghapus nota');
+        }
+    };
+
+    // Create Invoice Modal
+    window.showCreateInvoice = async function() {
+        // Populate customer dropdown
+        const select = document.getElementById('invoiceCustomer');
+        if (allCustomers.length === 0) {
+            const result = await apiCall('/admin/customers');
+            if (result && result.success) allCustomers = result.data;
+        }
+        select.innerHTML = '<option value="">-- Pilih Customer --</option>';
+        allCustomers.filter(c => (c.tipe || 'Belanja') === 'Belanja').forEach(c => {
+            select.innerHTML += `<option value="${c.id}" data-wa="${c.whatsapp}">${c.nama_lengkap} - ${c.whatsapp}</option>`;
+        });
+
+        // Reset form
+        document.getElementById('invoiceItems').innerHTML = `
+            <div class="invoice-item-row" style="display:grid;grid-template-columns:2fr 60px 1fr 30px;gap:8px;margin-bottom:8px;align-items:center;">
+                <input type="text" placeholder="Nama produk" class="inv-nama" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
+                <input type="number" placeholder="Qty" value="1" min="1" class="inv-qty" style="padding:10px 8px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;text-align:center;">
+                <input type="number" placeholder="Harga" class="inv-harga" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
+                <span></span>
+            </div>`;
+        document.getElementById('invoiceDiskon').value = '0';
+        document.getElementById('invoiceCatatan').value = '';
+
+        document.getElementById('createInvoiceModal').classList.add('show');
+    };
+
+    window.closeInvoiceModal = function() {
+        document.getElementById('createInvoiceModal').classList.remove('show');
+    };
+
+    window.addInvoiceItemRow = function() {
+        const container = document.getElementById('invoiceItems');
+        const row = document.createElement('div');
+        row.className = 'invoice-item-row';
+        row.style.cssText = 'display:grid;grid-template-columns:2fr 60px 1fr 30px;gap:8px;margin-bottom:8px;align-items:center;';
+        row.innerHTML = `
+            <input type="text" placeholder="Nama produk" class="inv-nama" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
+            <input type="number" placeholder="Qty" value="1" min="1" class="inv-qty" style="padding:10px 8px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;text-align:center;">
+            <input type="number" placeholder="Harga" class="inv-harga" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
+            <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:18px;padding:0;">&times;</button>
+        `;
+        container.appendChild(row);
+    };
+
+    window.submitInvoice = async function() {
+        const customerId = document.getElementById('invoiceCustomer').value;
+        if (!customerId) return alert('Pilih customer dulu');
+
+        const rows = document.querySelectorAll('.invoice-item-row');
+        const items = [];
+        rows.forEach(row => {
+            const nama = row.querySelector('.inv-nama').value.trim();
+            const qty = parseInt(row.querySelector('.inv-qty').value) || 1;
+            const harga = parseFloat(row.querySelector('.inv-harga').value) || 0;
+            if (nama && harga > 0) items.push({ nama, qty, harga });
+        });
+
+        if (items.length === 0) return alert('Tambahkan minimal 1 item produk');
+
+        const diskon = parseFloat(document.getElementById('invoiceDiskon').value) || 0;
+        const metode_pembayaran = document.getElementById('invoiceMetode').value;
+        const catatan = document.getElementById('invoiceCatatan').value.trim();
+
+        const result = await apiCall('/admin/invoices', {
+            method: 'POST',
+            body: JSON.stringify({ customer_id: customerId, items, diskon, metode_pembayaran, catatan })
+        });
+
+        if (result && result.success) {
+            closeInvoiceModal();
+            loadInvoices();
+            // Show preview immediately
+            previewInvoice(result.data.id);
+        } else {
+            alert('Gagal membuat nota: ' + (result?.message || 'Error'));
+        }
+    };
+
+    // Create invoice from customer detail (purchase)
+    window.createInvoiceFromPurchase = async function(purchaseId) {
+        const result = await apiCall('/admin/invoices/from-purchase', {
+            method: 'POST',
+            body: JSON.stringify({ purchase_id: purchaseId })
+        });
+
+        if (result && result.success) {
+            closeModal();
+            // Navigate to invoices tab
+            document.querySelectorAll('.nav-item').forEach(nav => {
+                nav.classList.remove('active');
+                if (nav.dataset.page === 'invoices') nav.classList.add('active');
+            });
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('invoicesPage').classList.add('active');
+            loadInvoices();
+            setTimeout(() => previewInvoice(result.data.id), 500);
+        } else {
+            alert('Gagal membuat nota: ' + (result?.message || 'Error'));
+        }
+    };
 
     // ============================================
     // ANALYTICS PAGE
