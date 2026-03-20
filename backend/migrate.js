@@ -179,7 +179,7 @@ async function migrate() {
     `);
     console.log('✅ View customer_stats created/verified');
 
-    // Buat default admin jika belum ada
+    // Buat default admin jika belum ada, atau update existing
     const { rows: adminRows } = await client.query('SELECT COUNT(*) as count FROM admins');
     if (parseInt(adminRows[0].count) === 0) {
       console.log('Creating default admin...');
@@ -188,14 +188,17 @@ async function migrate() {
 
       await client.query(
         'INSERT INTO admins (username, password, nama, email) VALUES ($1, $2, $3, $4)',
-        ['superadmin', hashedPassword, 'Super Admin', 'admin@localhost']
+        ['superadmin', hashedPassword, 'Cahaya Phone Superadmin', 'admin@localhost']
       );
       console.log('✅ Default admin created');
       console.log('   Username: superadmin');
       console.log('   Password: admin123');
-      console.log('   ⚠️  PLEASE CHANGE THIS PASSWORD AFTER FIRST LOGIN!');
     } else {
-      console.log('ℹ️  Admin already exists, skipping creation');
+      // Update existing admin username & nama to latest
+      await client.query(
+        `UPDATE admins SET username = 'superadmin', nama = 'Cahaya Phone Superadmin' WHERE id = (SELECT id FROM admins ORDER BY id LIMIT 1)`
+      );
+      console.log('✅ Admin updated: superadmin / Cahaya Phone Superadmin');
     }
 
     // Tampilkan ringkasan
