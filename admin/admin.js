@@ -730,13 +730,15 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 console.warn('⚠️ Failed to load stats');
             }
 
-            // Load recent customers
-            console.log('📊 Loading recent customers...');
+            // Load today's customers
+            console.log('📊 Loading today customers...');
             const customers = await apiCall('/admin/customers');
 
             if (customers && customers.success) {
-                console.log(`✅ Loaded ${customers.data.length} customers`);
-                displayRecentCustomers(customers.data.slice(0, 10));
+                const today = new Date().toISOString().slice(0, 10);
+                dashTodayCustomers = customers.data.filter(c => c.created_at && c.created_at.slice(0, 10) === today);
+                console.log(`✅ Loaded ${dashTodayCustomers.length} customers today`);
+                displayRecentCustomers();
             } else {
                 document.getElementById('recentCustomers').innerHTML = '<div class="no-data">Belum ada customer</div>';
             }
@@ -746,44 +748,74 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         }
     }
 
-    function displayRecentCustomers(customers) {
+    let dashTodayCustomers = [];
+    let dashActiveTab = 'Belanja';
+
+    window.switchDashTab = function(tab) {
+        dashActiveTab = tab;
+        const tabBelanja = document.getElementById('dashTabBelanja');
+        const tabChatOnly = document.getElementById('dashTabChatOnly');
+        if (tab === 'Belanja') {
+            tabBelanja.style.borderBottomColor = '#B91C1C';
+            tabBelanja.style.color = '#B91C1C';
+            tabChatOnly.style.borderBottomColor = 'transparent';
+            tabChatOnly.style.color = '#8C8078';
+        } else {
+            tabChatOnly.style.borderBottomColor = '#B91C1C';
+            tabChatOnly.style.color = '#B91C1C';
+            tabBelanja.style.borderBottomColor = 'transparent';
+            tabBelanja.style.color = '#8C8078';
+        }
+        displayRecentCustomers();
+    };
+
+    function displayRecentCustomers() {
         const container = document.getElementById('recentCustomers');
-        
+        const customers = dashTodayCustomers.filter(c => (c.tipe || 'Belanja') === dashActiveTab);
+
         if (customers.length === 0) {
-            container.innerHTML = '<div class="no-data">Belum ada customer</div>';
+            container.innerHTML = '<div class="no-data">Belum ada customer hari ini</div>';
             return;
         }
 
-        let html = `
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nama</th>
-                        <th>WhatsApp</th>
-                        <th>Sales</th>
-                        <th>Source</th>
-                        <th>Status</th>
-                        <th>Tanggal</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        const isBelanja = dashActiveTab === 'Belanja';
+        let html = `<table><thead><tr>
+            <th>Nama</th>
+            <th>WhatsApp</th>`;
+        if (isBelanja) {
+            html += `<th>Sales</th><th>Produk</th><th>Harga</th>`;
+        } else {
+            html += `<th>Catatan</th>`;
+        }
+        html += `<th>Source</th><th>Status</th><th>Jam</th><th>Aksi</th>
+            </tr></thead><tbody>`;
 
         customers.forEach(customer => {
-            const date = new Date(customer.created_at).toLocaleDateString('id-ID');
+            const time = new Date(customer.created_at).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
             const sourceClass = String(customer.source || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
             const statusClass = String(customer.status || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
-            
-            html += `
-                <tr>
-                    <td>${customer.nama_lengkap}</td>
-                    <td>${customer.whatsapp}</td>
-                    <td>${customer.nama_sales || '-'}</td>
-                    <td><span class="badge ${sourceClass}">${customer.source}</span></td>
-                    <td><span class="badge ${statusClass}">${customer.status}</span></td>
-                    <td>${date}</td>
-                </tr>
-            `;
+
+            html += `<tr>
+                <td>${customer.nama_lengkap}</td>
+                <td style="white-space:nowrap;">${customer.whatsapp} <a href="https://wa.me/${customer.whatsapp}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;background:#25D366;color:#fff;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;vertical-align:middle;margin-left:4px;">WA</a></td>`;
+
+            if (isBelanja) {
+                const produk = customer.merk_unit && customer.tipe_unit
+                    ? `${customer.merk_unit} ${customer.tipe_unit}` : '-';
+                const harga = customer.harga
+                    ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(customer.harga) : '-';
+                html += `<td>${customer.nama_sales || '-'}</td>
+                    <td>${produk}</td>
+                    <td>${harga}</td>`;
+            } else {
+                html += `<td>${customer.catatan || '-'}</td>`;
+            }
+
+            html += `<td><span class="badge ${sourceClass}">${customer.source}</span></td>
+                <td><span class="badge ${statusClass}">${customer.status}</span></td>
+                <td>${time}</td>
+                <td><button class="btn-small" onclick="viewCustomer(${customer.id})">Detail</button></td>
+            </tr>`;
         });
 
         html += '</tbody></table>';
@@ -1639,7 +1671,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         // Load monthly data if not cached
         if (!pipelineMonthlyData) {
             body.innerHTML = '<div class="loading">Loading...</div>';
-            modal.classList.add('active');
+            modal.classList.add('show');
             const resp = await apiCall('/admin/pipeline/monthly');
             if (resp && resp.success) {
                 pipelineMonthlyData = resp.data;
@@ -1649,7 +1681,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             }
         }
 
-        modal.classList.add('active');
+        modal.classList.add('show');
         const months = pipelineMonthlyData;
         const formatRp = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
 
@@ -1698,7 +1730,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     };
 
     window.closePipelineModal = function() {
-        document.getElementById('pipelineModal').classList.remove('active');
+        document.getElementById('pipelineModal').classList.remove('show');
     };
 
     // ============================================

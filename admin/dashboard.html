@@ -232,8 +232,12 @@
 
             <!-- Recent Customers -->
             <div class="card">
-                <div class="card-header">
-                    <h3>Customer Terbaru</h3>
+                <div class="card-header" style="flex-direction:column;align-items:stretch;gap:12px;">
+                    <h3>Customer Hari Ini</h3>
+                    <div style="display:flex;gap:0;border-bottom:2px solid #EDE8E3;">
+                        <button id="dashTabBelanja" onclick="switchDashTab('Belanja')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid #B91C1C;color:#B91C1C;margin-bottom:-2px;">Belanja</button>
+                        <button id="dashTabChatOnly" onclick="switchDashTab('Chat Only')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;color:#8C8078;margin-bottom:-2px;">Tidak Belanja</button>
+                    </div>
                 </div>
                 <div id="recentCustomers" class="card-body">
                     <div class="loading">Loading...</div>
