@@ -873,8 +873,10 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             <th>WhatsApp</th>`;
         if (isBelanja) {
             html += `<th>Sales</th><th>Produk</th><th>Harga</th><th>Metode</th>`;
+        } else {
+            html += `<th>Catatan</th>`;
         }
-        html += `<th>Source</th><th>Status</th><th>Tanggal</th><th>Aksi</th>
+        html += `<th>Source</th><th>Status</th><th>WA</th><th>Tanggal</th><th>Aksi</th>
             </tr></thead><tbody>`;
 
         pageData.forEach((customer, index) => {
@@ -884,6 +886,11 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
             const pCount = customer.purchase_count || 0;
             const repeatBadge = pCount > 1 ? ` <span style="background:#B91C1C;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;font-weight:600;">${pCount}x</span>` : '';
+
+            // WA sent indicator
+            let waIcon = '<span style="color:#ccc;" title="Belum diketahui">—</span>';
+            if (customer.wa_sent === true) waIcon = '<span style="color:#25D366;" title="WA terkirim">&#10003;</span>';
+            else if (customer.wa_sent === false) waIcon = '<span style="color:#DC2626;" title="WA gagal terkirim">&#10007;</span>';
 
             html += `<tr>
                 <td>${start + index + 1}</td>
@@ -899,10 +906,15 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                     <td>${produk}</td>
                     <td>${harga}</td>
                     <td>${customer.metode_pembayaran || '-'}</td>`;
+            } else {
+                // Catatan editable for Chat Only
+                const catVal = (customer.catatan || '').replace(/"/g, '&quot;');
+                html += `<td><input type="text" value="${catVal}" placeholder="Tulis catatan..." style="border:1px solid #EDE8E3;padding:6px 10px;border-radius:6px;font-size:13px;width:100%;min-width:180px;background:#FAFAF8;" onblur="saveCatatan(${customer.id}, this.value)" onkeydown="if(event.key==='Enter'){this.blur();}"></td>`;
             }
 
             html += `<td><span class="badge ${sourceClass}">${customer.source}</span></td>
                 <td><span class="badge ${statusClass}">${customer.status}</span></td>
+                <td style="text-align:center;font-size:18px;">${waIcon}</td>
                 <td>${date}</td>
                 <td><div class="table-actions">
                     <button class="btn-small" onclick="viewCustomer(${customer.id})">Detail</button>
@@ -1120,8 +1132,18 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         });
         if (res && res.success) {
             selectEl.className = 'status-select ' + newStatus.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-            // Refresh customer list if loaded
             if (allCustomers.length > 0) loadCustomers();
+        }
+    };
+
+    window.saveCatatan = async function(customerId, value) {
+        const res = await apiCall(`/admin/customers/${customerId}/catatan`, {
+            method: 'PATCH',
+            body: JSON.stringify({ catatan: value })
+        });
+        if (res && res.success) {
+            const c = allCustomers.find(c => c.id === customerId);
+            if (c) c.catatan = value;
         }
     };
 

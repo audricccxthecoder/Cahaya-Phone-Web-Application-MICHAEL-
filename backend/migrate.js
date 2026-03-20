@@ -116,6 +116,14 @@ async function migrate() {
     await client.query(`UPDATE customers SET tipe = 'Belanja' WHERE tipe IS NULL`);
     console.log('✅ opted_in column verified');
 
+    // Ensure catatan column exists (notes for Chat Only customers)
+    console.log('Ensuring catatan column...');
+    await client.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS catatan TEXT`);
+
+    // Ensure wa_sent column exists (WhatsApp delivery status)
+    console.log('Ensuring wa_sent column...');
+    await client.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS wa_sent BOOLEAN DEFAULT NULL`);
+
     // Migrate old status values to new system
     console.log('Migrating status values...');
     await client.query(`UPDATE customers SET status = 'Contacted' WHERE status = 'Existing'`);

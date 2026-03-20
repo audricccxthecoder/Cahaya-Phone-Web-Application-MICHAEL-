@@ -134,11 +134,14 @@ exports.submitForm = async (req, res) => {
             [customerId, `Terima kasih ${finalName}, data Anda telah kami terima. Tim kami akan menghubungi segera.`]
         );
 
+        let waSent = false;
         try {
-            await whatsappService.sendAutoReply({ nama_lengkap: finalName, whatsapp: cleanPhone });
+            const waResult = await whatsappService.sendAutoReply({ nama_lengkap: finalName, whatsapp: cleanPhone });
+            waSent = waResult && waResult.success;
         } catch (waError) {
             console.warn('⚠️ WhatsApp auto-reply failed:', waError.message || waError);
         }
+        await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customerId]);
 
         // Auto-save to Google Contacts (if connected)
         try {

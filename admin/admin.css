@@ -65,6 +65,7 @@ html, body {
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-weight: 400;
+    font-size: 15px;
     background: var(--bg-page);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
@@ -173,7 +174,7 @@ body {
 .header {
     background: var(--bg-card);
     color: var(--text-primary);
-    padding: 0 32px;
+    padding: 0 40px;
     border-bottom: 1px solid var(--border);
     position: relative;
 }
@@ -193,15 +194,13 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    max-width: 1600px;
-    margin: 0 auto;
-    padding: 18px 0;
+    padding: 20px 0;
 }
 
 .header h1 {
     font-family: 'Playfair Display', serif;
-    font-size: 22px;
-    font-weight: 400;
+    font-size: 26px;
+    font-weight: 500;
     letter-spacing: 0.04em;
     color: var(--text-primary);
 }
@@ -213,7 +212,7 @@ body {
 }
 
 .admin-name {
-    font-size: 15px;
+    font-size: 16px;
     color: var(--text-primary);
     font-weight: 500;
     letter-spacing: 0.01em;
@@ -226,21 +225,19 @@ body {
 .nav {
     background: var(--bg-card);
     border-bottom: 1px solid var(--border);
-    padding: 0 32px;
+    padding: 0 40px;
     display: flex;
     gap: 0;
-    max-width: 1600px;
-    margin: 0 auto;
 }
 
 .nav-item {
-    padding: 14px 24px;
+    padding: 16px 28px;
     text-decoration: none;
     color: var(--text-muted);
     border-bottom: 2px solid transparent;
     transition: all 0.3s var(--ease);
     font-weight: 500;
-    font-size: 14px;
+    font-size: 15px;
     letter-spacing: 0.02em;
 }
 
@@ -259,9 +256,8 @@ body {
    ============================================ */
 
 .main {
-    max-width: 1600px;
-    margin: 28px auto;
-    padding: 0 32px;
+    margin: 28px 0;
+    padding: 0 40px;
 }
 
 .page {
@@ -405,7 +401,7 @@ body {
 }
 
 .stat-value {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -433,8 +429,8 @@ body {
 .card-header h3 {
     font-family: 'Playfair Display', serif;
     color: var(--text-primary);
-    font-size: 17px;
-    font-weight: 400;
+    font-size: 20px;
+    font-weight: 500;
     letter-spacing: 0.02em;
 }
 
@@ -455,20 +451,20 @@ table {
 
 th {
     background: var(--bg-section);
-    padding: 12px 14px;
+    padding: 14px 16px;
     text-align: left;
     font-weight: 600;
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border);
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
 td {
-    padding: 12px 14px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--border);
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-primary);
 }
 
@@ -491,9 +487,9 @@ tr:last-child td {
 
 .badge {
     display: inline-block;
-    padding: 4px 10px;
+    padding: 5px 12px;
     border-radius: 100px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.02em;
 }

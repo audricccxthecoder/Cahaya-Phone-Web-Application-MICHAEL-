@@ -267,7 +267,7 @@ exports.getCustomers = async (req, res) => {
         const { rows: customers } = await db.query(
             `SELECT c.id, c.nama_lengkap, c.nama_sales, c.merk_unit, c.tipe_unit,
                 c.harga, c.qty, c.whatsapp, c.metode_pembayaran,
-                c.source, c.status, c.tipe, c.created_at,
+                c.source, c.status, c.tipe, c.created_at, c.catatan, c.wa_sent,
                 COALESCE(p.purchase_count, 0)::int as purchase_count
             FROM customers c
             LEFT JOIN (
@@ -360,6 +360,31 @@ exports.updateCustomerStatus = async (req, res) => {
     } catch (error) {
         console.error('❌ Update status error:', error);
         res.status(500).json({ success: false, message: 'Gagal mengubah status' });
+    }
+};
+
+/**
+ * Update customer notes (catatan)
+ * PATCH /api/admin/customers/:id/catatan
+ */
+exports.updateCustomerCatatan = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { catatan } = req.body;
+
+        const { rowCount } = await db.query(
+            'UPDATE customers SET catatan = $1, updated_at = NOW() WHERE id = $2',
+            [catatan || null, id]
+        );
+
+        if (rowCount === 0) {
+            return res.status(404).json({ success: false, message: 'Customer tidak ditemukan' });
+        }
+
+        res.json({ success: true, message: 'Catatan berhasil disimpan' });
+    } catch (error) {
+        console.error('❌ Update catatan error:', error);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan catatan' });
     }
 };
 

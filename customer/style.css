@@ -143,7 +143,7 @@ body::after {
 .page-wrapper {
     position: relative;
     z-index: 1;
-    max-width: 680px;
+    max-width: 780px;
     margin: 0 auto;
     padding: 56px 16px 80px;
 }
@@ -393,7 +393,7 @@ form {
 
 .section-header h3 {
     font-family: 'Playfair Display', serif;
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 400;
     color: var(--text-primary);
     letter-spacing: 0.02em;
@@ -454,12 +454,12 @@ input[type="number"],
 select,
 textarea {
     width: 100%;
-    padding: 14px 18px;
+    padding: 16px 20px;
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius-xs);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 16px;
     font-family: 'Inter', sans-serif;
     font-weight: 400;
     transition: all var(--duration) var(--ease);
