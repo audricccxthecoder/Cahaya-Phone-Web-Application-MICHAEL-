@@ -134,36 +134,42 @@ exports.submitForm = async (req, res) => {
             [customerId, `Terima kasih ${finalName}, data Anda telah kami terima. Tim kami akan menghubungi segera.`]
         );
 
-        let waSent = false;
-        try {
-            const waResult = await whatsappService.sendAutoReply({ nama_lengkap: finalName, whatsapp: cleanPhone });
-            waSent = waResult && waResult.success;
-        } catch (waError) {
-            console.warn('⚠️ WhatsApp auto-reply failed:', waError.message || waError);
-        }
-        await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customerId]);
-
-        // Auto-save to Google Contacts (if connected)
-        try {
-            await googleService.saveContact({
-                nama_lengkap: finalName,
-                whatsapp: cleanPhone,
-                alamat: fullAddress || null,
-                merk_unit: merk_unit || null,
-                tipe_unit: tipe_unit || null,
-                metode_pembayaran: metode_pembayaran || null,
-                source,
-                tipe: 'Belanja'
-            });
-        } catch (gcError) {
-            console.warn('⚠️ Google Contact save failed:', gcError.message || gcError);
-        }
-
+        // Response langsung (cepat!) — WA dan Google jalan di background
         res.json({
             success: true,
             message: 'Pendaftaran berhasil. Terima kasih!',
             customer_id: customerId
         });
+
+        // Background: kirim WA auto-reply (tidak blocking response)
+        (async () => {
+            try {
+                const waResult = await whatsappService.sendAutoReply({ nama_lengkap: finalName, whatsapp: cleanPhone });
+                const waSent = waResult && waResult.success;
+                await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customerId]);
+            } catch (waError) {
+                console.warn('⚠️ WhatsApp auto-reply failed:', waError.message || waError);
+                await db.query('UPDATE customers SET wa_sent = FALSE WHERE id = $1', [customerId]).catch(() => {});
+            }
+        })();
+
+        // Background: auto-save to Google Contacts (tidak blocking response)
+        (async () => {
+            try {
+                await googleService.saveContact({
+                    nama_lengkap: finalName,
+                    whatsapp: cleanPhone,
+                    alamat: fullAddress || null,
+                    merk_unit: merk_unit || null,
+                    tipe_unit: tipe_unit || null,
+                    metode_pembayaran: metode_pembayaran || null,
+                    source,
+                    tipe: 'Belanja'
+                });
+            } catch (gcError) {
+                console.warn('⚠️ Google Contact save failed:', gcError.message || gcError);
+            }
+        })();
 
     } catch (error) {
         console.error('❌ Form submit error:', error);

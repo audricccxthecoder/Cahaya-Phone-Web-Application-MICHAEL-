@@ -148,20 +148,62 @@ class WhatsAppService {
     }
 
     /**
+     * Ambil pesan auto-reply custom dari WA Bridge
+     */
+    async _getCustomAutoReply() {
+        if (!this.useBridge) return null;
+        try {
+            const response = await axios.get(`${this.bridgeUrl}/api/auto-reply`, {
+                headers: { 'X-WA-Secret': this.bridgeSecret },
+                timeout: 5000
+            });
+            if (response.data && response.data.autoReplyMessage) {
+                return response.data.autoReplyMessage;
+            }
+        } catch (e) {
+            // fallback ke default
+        }
+        return null;
+    }
+
+    /**
      * Auto-reply after customer submits form
+     * Pakai pesan custom dari WA Bridge jika ada
      */
     async sendAutoReply(customer) {
-        const message = `Hai Kak ${customer.nama_lengkap} \nTerima Kasih Banyak sudah berbelanja di toko kami CAHAYA PHONE \nSemoga puas dan cocok dengan produknya. Jangan sungkan untuk menghubungi kami lagi ya..`;
+        const defaultMsg = `Hai Kak ${customer.nama_lengkap}\nTerima Kasih Banyak sudah berbelanja di toko kami CAHAYA PHONE\nSemoga puas dan cocok dengan produknya. Jangan sungkan untuk menghubungi kami lagi ya..`;
+
+        let message = defaultMsg;
+        try {
+            const customMsg = await this._getCustomAutoReply();
+            if (customMsg) {
+                message = customMsg.replace(/{nama}/gi, customer.nama_lengkap || 'Kak');
+            }
+        } catch (e) {
+            // pakai default
+        }
+
         return await this.sendMessage(customer.whatsapp, message);
     }
 
     /**
      * Welcome message for incoming WhatsApp chat
+     * Pakai pesan custom dari WA Bridge jika ada
      */
     async sendWelcomeMessage(phoneNumber, customerName = '') {
         const name = customerName || 'Kak';
-        const message = `Halo ${name}, terima kasih sudah menghubungi Cahaya Phone! ` +
-            `Tim kami akan segera membantu Anda.`;
+        const defaultMsg = `Halo ${name}, terima kasih sudah menghubungi Cahaya Phone! Tim kami akan segera membantu Anda.`;
+
+        let message = defaultMsg;
+        try {
+            const customMsg = await this._getCustomAutoReply();
+            if (customMsg) {
+                message = customMsg.replace(/{nama}/gi, name);
+            }
+        } catch (e) {
+            // pakai default
+        }
+
         return await this.sendMessage(phoneNumber, message);
     }
 }

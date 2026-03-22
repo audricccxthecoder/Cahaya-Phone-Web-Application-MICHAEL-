@@ -53,7 +53,7 @@ let autoReplyMessage = process.env.AUTO_REPLY_MESSAGE ||
 
 const ANTI_BAN = {
     // Delay antara pesan (ms)
-    singleMessageDelay: { min: 2000, max: 4000 },
+    singleMessageDelay: { min: 500, max: 1500 },
     broadcastDelay: { min: 8000, max: 15000 },
 
     // Daily limit
@@ -160,7 +160,8 @@ const puppeteerConfig = {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--disable-gpu',
-        '--single-process'
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-site-isolation-trials'
     ]
 };
 
@@ -171,6 +172,7 @@ if (process.env.PUPPETEER_EXECUTABLE_PATH) {
 
 const waClient = new Client({
     authStrategy: new LocalAuth({ dataPath: './wa-session' }),
+    webVersionCache: { type: 'none' },
     puppeteer: puppeteerConfig
 });
 
@@ -287,13 +289,31 @@ waClient.on('auth_failure', (msg) => {
     clientState.lastError = 'Authentication failed: ' + msg;
 });
 
-// Initialize client
-console.log('[INIT] Starting WhatsApp client...');
-waClient.initialize().catch(err => {
-    console.error('[INIT] Failed to initialize:', err);
-    clientState.status = 'error';
-    clientState.lastError = err.message;
-});
+// Initialize client with retry
+async function initializeWithRetry(maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`[INIT] Starting WhatsApp client (attempt ${attempt}/${maxRetries})...`);
+            await waClient.initialize();
+            console.log('[INIT] Client initialized successfully');
+            return;
+        } catch (err) {
+            console.error(`[INIT] Attempt ${attempt} failed:`, err.message);
+            clientState.lastError = err.message;
+
+            if (attempt < maxRetries) {
+                const waitSec = attempt * 5;
+                console.log(`[INIT] Retrying in ${waitSec} seconds...`);
+                await new Promise(r => setTimeout(r, waitSec * 1000));
+            } else {
+                console.error('[INIT] All attempts failed. Use /api/restart to try again.');
+                clientState.status = 'error';
+            }
+        }
+    }
+}
+
+initializeWithRetry();
 
 // ============================================
 // API ROUTES
@@ -413,7 +433,13 @@ app.post('/api/disconnect', authCheck, async (req, res) => {
 });
 
 // Restart client (re-generate QR)
+let isRestarting = false;
 app.post('/api/restart', authCheck, async (req, res) => {
+    if (isRestarting) {
+        return res.json({ success: true, message: 'Already restarting. Check /api/status for QR.' });
+    }
+    isRestarting = true;
+
     try {
         clientState.status = 'disconnected';
         clientState.qr = null;
@@ -421,12 +447,16 @@ app.post('/api/restart', authCheck, async (req, res) => {
 
         await waClient.destroy().catch(() => {});
         console.log('[RESTART] Reinitializing client...');
-        await waClient.initialize();
 
+        // Respond immediately, init in background
         res.json({ success: true, message: 'WhatsApp client restarting. Check /api/status for QR.' });
+
+        await initializeWithRetry(3);
+        isRestarting = false;
     } catch (err) {
         clientState.status = 'error';
         clientState.lastError = err.message;
+        isRestarting = false;
         res.status(500).json({ success: false, error: err.message });
     }
 });

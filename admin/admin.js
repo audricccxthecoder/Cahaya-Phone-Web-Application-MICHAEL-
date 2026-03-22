@@ -855,6 +855,37 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         await loadDashboard();
     };
 
+    window.refreshAll = async function() {
+        const btn = document.getElementById('refreshAllBtn');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Loading...';
+        btn.disabled = true;
+
+        try {
+            // Cari halaman yang aktif
+            const activePage = document.querySelector('.nav-item.active');
+            const page = activePage ? activePage.dataset.page : 'dashboard';
+
+            // Refresh semua data inti
+            pipelineMonthlyData = null;
+            await loadDashboard();
+            loadCleanupBanner();
+
+            // Refresh halaman yang sedang aktif
+            if (page === 'customers') await loadCustomers();
+            else if (page === 'analytics') loadAnalytics();
+            else if (page === 'invoices') loadInvoices();
+            else if (page === 'waconnect') { loadWAStatus(); loadWAAutoReply(); }
+            else if (page === 'broadcast') { loadDailySentCount(); const s = await apiCall('/admin/broadcast/status'); if (s && s.status) renderBroadcastStatus(s.status); }
+            else if (page === 'messages') { await loadMessages(); loadCleanupStatus(); }
+        } catch (e) {
+            console.error('Refresh error:', e);
+        }
+
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    };
+
     let activeTab = 'Belanja';
     let currentPage = 1;
     const rowsPerPage = 15;
