@@ -15,14 +15,24 @@ const VALID_STATUSES = ['New', 'Contacted', 'Follow Up', 'Completed', 'Inactive'
 // ANTI-SPAM: Message variation helpers
 // ============================================
 const RANDOM_GREETINGS = [
-    '', '', '', // empty = no prefix (most common, keeps original message)
-    'Halo, ', 'Hi, ', 'Hai, ',
+    '', '', // empty = no prefix (keeps original message)
+    'Halo Kak, ', 'Hi Kak, ', 'Hai Kak, ', 'Halo, ', 'Hai, ',
+    'Halo Kak! ', 'Hi! ', 'Hai! ', 'Hey Kak, ',
+    'Selamat siang Kak, ', 'Selamat sore Kak, ',
+    'Assalamualaikum Kak, ', 'Permisi Kak, ',
 ];
 
 const RANDOM_CLOSINGS = [
-    '', '', '', // empty = no closing (most common)
-    ' 😊', ' 🙏', ' ✨', ' 👍',
-    '\n\nTerima kasih!', '\n\nSalam hangat!', '\n\nSukses selalu!',
+    '', // empty = no closing
+    ' 😊', ' 🙏', ' ✨', ' 👍', ' 🔥', ' 💯', ' 🎉', ' ❤️',
+    ' 😁', ' 🤗', ' 👋', ' 💪', ' ⭐', ' 🌟', ' 📱', ' 🛒',
+    '\n\nTerima kasih! 🙏', '\n\nSalam hangat! 😊', '\n\nSukses selalu! ✨',
+    '\n\nDitunggu ya Kak! 👋', '\n\nYuk mampir! 🔥', '\n\nInfo lanjut hubungi kami ya 📱',
+];
+
+const RANDOM_FILLERS = [
+    '', '', '', // mostly empty
+    ' nih', ' ya', ' lho', ' dong', ' yuk', ' nih Kak',
 ];
 
 /**
@@ -33,15 +43,32 @@ function variasiPesan(message, customerName) {
     let msg = message.replace(/{nama}/gi, customerName || 'Kak');
 
     // Random greeting prefix (only if message doesn't already start with greeting)
-    const startsWithGreeting = /^(halo|hai|hi|hey|selamat)/i.test(msg);
+    const startsWithGreeting = /^(halo|hai|hi|hey|selamat|assalam|permisi)/i.test(msg);
     if (!startsWithGreeting) {
         const greeting = RANDOM_GREETINGS[Math.floor(Math.random() * RANDOM_GREETINGS.length)];
         if (greeting) msg = greeting + msg;
     }
 
+    // Random filler word inserted after first sentence (before first period/newline)
+    const filler = RANDOM_FILLERS[Math.floor(Math.random() * RANDOM_FILLERS.length)];
+    if (filler) {
+        const firstBreak = msg.search(/[.!\n]/);
+        if (firstBreak > 10) {
+            msg = msg.slice(0, firstBreak) + filler + msg.slice(firstBreak);
+        }
+    }
+
     // Random closing/emoji at end
     const closing = RANDOM_CLOSINGS[Math.floor(Math.random() * RANDOM_CLOSINGS.length)];
     msg = msg + closing;
+
+    // Random invisible variation: add 1-3 zero-width spaces at random positions
+    const zwsp = '\u200B';
+    const numZwsp = Math.floor(Math.random() * 3) + 1;
+    for (let i = 0; i < numZwsp; i++) {
+        const pos = Math.floor(Math.random() * msg.length);
+        msg = msg.slice(0, pos) + zwsp + msg.slice(pos);
+    }
 
     return msg;
 }
