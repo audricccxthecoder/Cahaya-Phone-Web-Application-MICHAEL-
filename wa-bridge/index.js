@@ -217,6 +217,42 @@ waClient.on('ready', async () => {
     }
 });
 
+// Disconnected event — auto-reconnect
+waClient.on('disconnected', async (reason) => {
+    console.log(`[DISCONNECT] WhatsApp disconnected: ${reason}`);
+    clientState.status = 'disconnected';
+    clientState.info = null;
+    clientState.lastError = `Disconnected: ${reason}`;
+    clientState.disconnectedAt = new Date().toISOString();
+
+    // Auto-reconnect after 10 seconds (if not manually triggered logout)
+    if (reason !== 'LOGOUT' && !isRestarting) {
+        console.log('[RECONNECT] Auto-reconnecting in 10 seconds...');
+        setTimeout(async () => {
+            if (clientState.status === 'disconnected' && !isRestarting) {
+                console.log('[RECONNECT] Attempting to reconnect...');
+                isRestarting = true;
+                try {
+                    await waClient.destroy().catch(() => {});
+                    await initializeWithRetry(3);
+                } catch (err) {
+                    console.error('[RECONNECT] Failed:', err.message);
+                    clientState.lastError = `Reconnect failed: ${err.message}`;
+                } finally {
+                    isRestarting = false;
+                }
+            }
+        }, 10000);
+    }
+});
+
+// Auth failure event
+waClient.on('auth_failure', (msg) => {
+    console.error('[AUTH FAIL]', msg);
+    clientState.status = 'error';
+    clientState.lastError = `Auth failed: ${msg}. Perlu scan QR ulang.`;
+});
+
 // Incoming message handler
 waClient.on('message', async (msg) => {
     // Abaikan pesan dari group, status, broadcast, atau pesan sendiri

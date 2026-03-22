@@ -638,6 +638,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             } else if (targetPage === 'waconnect') {
                 loadWAStatus();
                 loadWAAutoReply();
+                loadFailedWA();
             } else if (targetPage === 'messages') {
                 loadMessages();
                 loadCleanupStatus();
@@ -888,12 +889,13 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             pipelineMonthlyData = null;
             await loadDashboard();
             loadCleanupBanner();
+            checkWADisconnectBanner();
 
             // Refresh halaman yang sedang aktif
             if (page === 'customers') await loadCustomers();
             else if (page === 'analytics') loadAnalytics();
             else if (page === 'invoices') loadInvoices();
-            else if (page === 'waconnect') { loadWAStatus(); loadWAAutoReply(); }
+            else if (page === 'waconnect') { loadWAStatus(); loadWAAutoReply(); loadFailedWA(); }
             else if (page === 'broadcast') { loadDailySentCount(); const s = await apiCall('/admin/broadcast/status'); if (s && s.status) renderBroadcastStatus(s.status); }
             else if (page === 'messages') { await loadMessages(); loadCleanupStatus(); }
         } catch (e) {
@@ -1416,6 +1418,42 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         if (res && res.success) updateCleanupBanner(res.data);
     }
 
+    async function checkWADisconnectBanner() {
+        const banner = document.getElementById('waDisconnectBanner');
+        if (!banner) return;
+
+        try {
+            const [waRes, failedRes] = await Promise.all([
+                apiCall('/admin/wa/status'),
+                apiCall('/admin/wa/failed')
+            ]);
+
+            const isConnected = waRes && waRes.success && waRes.status === 'ready';
+            const failedCount = (failedRes && failedRes.success) ? failedRes.count : 0;
+
+            if (!isConnected || failedCount > 0) {
+                banner.style.display = 'block';
+                const countEl = document.getElementById('waFailedCount');
+                const textEl = document.getElementById('waDisconnectText');
+                if (!isConnected && failedCount > 0) {
+                    textEl.innerHTML = `WhatsApp terputus! Auto-reply tidak aktif. Ada <strong>${failedCount}</strong> pesan gagal terkirim.`;
+                } else if (!isConnected) {
+                    textEl.innerHTML = 'WhatsApp terputus! Auto-reply dan broadcast tidak aktif.';
+                } else {
+                    banner.style.background = 'linear-gradient(135deg,#FEF3C7,#FDE68A)';
+                    banner.style.borderColor = '#F59E0B';
+                    textEl.innerHTML = `<span style="color:#92400E;">Ada <strong>${failedCount}</strong> pesan gagal terkirim. Buka WA Connect untuk kirim ulang.</span>`;
+                    textEl.style.color = '#92400E';
+                    banner.querySelector('strong').style.color = '#92400E';
+                }
+            } else {
+                banner.style.display = 'none';
+            }
+        } catch (e) {
+            banner.style.display = 'none';
+        }
+    }
+
     // --- Messages functions ---
 
     async function loadMessages() {
@@ -1741,6 +1779,46 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             alert('Gagal restart: ' + (res?.error || 'Unknown error'));
             loadWAStatus();
         }
+    };
+
+    // ============================================
+    // FAILED WA MESSAGES - RETRY
+    // ============================================
+
+    window.loadFailedWA = async function() {
+        const container = document.getElementById('failedWAContainer');
+        if (!container) return;
+        const res = await apiCall('/admin/wa/failed');
+        if (!res || !res.success || res.count === 0) {
+            container.innerHTML = '<div class="no-data" style="color:#25D366;">Semua pesan berhasil terkirim ✓</div>';
+            return;
+        }
+        let html = `<p style="font-size:13px;color:#B91C1C;margin:0 0 12px;font-weight:600;">${res.count} pesan gagal terkirim</p>`;
+        html += '<div style="max-height:300px;overflow-y:auto;">';
+        html += '<table><thead><tr><th>Nama</th><th>WhatsApp</th><th>Tipe</th><th>Aksi</th></tr></thead><tbody>';
+        res.data.forEach(c => {
+            html += `<tr>
+                <td>${c.nama_lengkap}</td>
+                <td>${c.whatsapp}</td>
+                <td><span class="badge">${c.tipe || 'Belanja'}</span></td>
+                <td><button class="btn-small" style="padding:4px 12px;font-size:11px;" onclick="retrySingleWA(${c.id})">Kirim Ulang</button></td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    };
+
+    window.retrySingleWA = async function(id) {
+        const res = await apiCall(`/admin/wa/retry/${id}`, { method: 'POST', body: '{}' });
+        alert(res?.message || 'Error');
+        loadFailedWA();
+    };
+
+    window.retryAllWA = async function() {
+        if (!confirm('Kirim ulang semua pesan yang gagal?')) return;
+        const res = await apiCall('/admin/wa/retry-all', { method: 'POST', body: '{}' });
+        alert(res?.message || 'Error');
+        loadFailedWA();
     };
 
     // ============================================
@@ -2465,6 +2543,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
     loadDashboard();
     loadCleanupBanner();
+    checkWADisconnectBanner();
 }
 
 console.log('✅ Admin Panel initialized');

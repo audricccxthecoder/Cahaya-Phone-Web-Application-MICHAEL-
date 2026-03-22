@@ -105,6 +105,9 @@ router.get('/admin/wa/auto-reply', authMiddleware, adminController.getWAAutoRepl
 router.post('/admin/wa/disconnect', authMiddleware, adminController.disconnectWA);
 router.post('/admin/wa/restart', authMiddleware, adminController.restartWA);
 router.post('/admin/wa/settings', authMiddleware, adminController.updateWASettings);
+router.get('/admin/wa/failed', authMiddleware, adminController.getFailedWA);
+router.post('/admin/wa/retry/:id', authMiddleware, adminController.retryWA);
+router.post('/admin/wa/retry-all', authMiddleware, adminController.retryAllWA);
 
 // Data cleanup
 router.get('/admin/cleanup/status', authMiddleware, adminController.getCleanupStatus);

@@ -38,6 +38,22 @@
         <!-- Dashboard Page -->
         <div id="dashboardPage" class="page active">
 
+            <!-- WA Disconnect Banner -->
+            <div id="waDisconnectBanner" style="display:none;background:linear-gradient(135deg,#FEE2E2,#FECACA);border:1px solid #DC2626;padding:14px 20px;border-radius:10px;margin-bottom:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:20px;">&#x26A0;</span>
+                        <div>
+                            <strong style="font-size:13px;color:#DC2626;">WhatsApp Terputus!</strong>
+                            <p style="margin:2px 0 0;font-size:12px;color:#DC2626;" id="waDisconnectText">Auto-reply dan broadcast tidak aktif. Ada <span id="waFailedCount">0</span> pesan gagal.</p>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-small" style="font-size:11px;padding:6px 14px;background:#DC2626;color:#fff;border-color:#DC2626;" onclick="document.querySelector('[data-page=waconnect]').click()">Buka WA Connect</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Cleanup Warning Banner -->
             <div id="cleanupBanner" style="display:none;background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:1px solid #F59E0B;padding:14px 20px;border-radius:10px;margin-bottom:16px;display:none;">
                 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -486,6 +502,22 @@
                         </div>
                     </div>
                     <button class="btn-primary" style="width:auto;" onclick="saveWASettings()">Simpan Settings</button>
+                </div>
+            </div>
+
+            <!-- Failed Messages - Retry -->
+            <div class="card" style="margin-bottom:16px;">
+                <div class="card-header">
+                    <h3>Pesan Gagal Terkirim</h3>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-small" onclick="loadFailedWA()">Refresh</button>
+                        <button class="btn-small" style="background:rgba(185,28,28,0.08);color:#B91C1C;border:1px solid rgba(185,28,28,0.2);" onclick="retryAllWA()">Kirim Ulang Semua</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="failedWAContainer">
+                        <div class="no-data">Memuat data...</div>
+                    </div>
                 </div>
             </div>
 

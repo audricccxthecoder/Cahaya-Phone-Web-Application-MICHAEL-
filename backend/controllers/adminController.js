@@ -1406,6 +1406,79 @@ exports.updateWASettings = async (req, res) => {
 };
 
 // ============================================
+// RETRY FAILED WA MESSAGES
+// ============================================
+
+/**
+ * Get customers with failed WA delivery
+ * GET /api/admin/wa/failed
+ */
+exports.getFailedWA = async (req, res) => {
+    try {
+        const { rows } = await db.query(
+            `SELECT id, nama_lengkap, whatsapp, wa_sent, tipe, created_at
+             FROM customers WHERE wa_sent = FALSE ORDER BY created_at DESC`
+        );
+        res.json({ success: true, data: rows, count: rows.length });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Retry sending WA message to a specific customer
+ * POST /api/admin/wa/retry/:id
+ */
+exports.retryWA = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { rows } = await db.query('SELECT id, nama_lengkap, whatsapp FROM customers WHERE id = $1', [id]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Customer tidak ditemukan' });
+
+        const customer = rows[0];
+        const waResult = await whatsappService.sendAutoReply({ nama_lengkap: customer.nama_lengkap, whatsapp: customer.whatsapp });
+        const waSent = waResult && waResult.success;
+        await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customer.id]);
+
+        res.json({ success: waSent, message: waSent ? 'Pesan berhasil dikirim ulang' : 'Gagal kirim ulang' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Retry all failed WA messages
+ * POST /api/admin/wa/retry-all
+ */
+exports.retryAllWA = async (req, res) => {
+    try {
+        const { rows } = await db.query(
+            `SELECT id, nama_lengkap, whatsapp FROM customers WHERE wa_sent = FALSE ORDER BY created_at ASC`
+        );
+        if (rows.length === 0) return res.json({ success: true, message: 'Tidak ada pesan gagal', retried: 0 });
+
+        let sent = 0, failed = 0;
+        for (const customer of rows) {
+            try {
+                const waResult = await whatsappService.sendAutoReply({ nama_lengkap: customer.nama_lengkap, whatsapp: customer.whatsapp });
+                const waSent = waResult && waResult.success;
+                await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customer.id]);
+                if (waSent) sent++; else failed++;
+                // Anti-spam delay
+                await new Promise(r => setTimeout(r, 3000 + Math.random() * 5000));
+            } catch (e) {
+                failed++;
+                await db.query('UPDATE customers SET wa_sent = FALSE WHERE id = $1', [customer.id]).catch(() => {});
+            }
+        }
+
+        res.json({ success: true, message: `Kirim ulang selesai: ${sent} berhasil, ${failed} gagal`, sent, failed });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ============================================
 // DATA CLEANUP (Chat Log & Broadcast Log)
 // ============================================
 //
