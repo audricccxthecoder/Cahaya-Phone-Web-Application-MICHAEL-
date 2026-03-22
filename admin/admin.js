@@ -741,8 +741,14 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             const customers = await apiCall('/admin/customers');
 
             if (customers && customers.success) {
-                const today = new Date().toISOString().slice(0, 10);
-                dashTodayCustomers = customers.data.filter(c => c.created_at && c.created_at.slice(0, 10) === today);
+                const now = new Date();
+                const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+                dashTodayCustomers = customers.data.filter(c => {
+                    if (!c.created_at) return false;
+                    const d = new Date(c.created_at);
+                    const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    return localDate === today;
+                });
                 console.log(`✅ Loaded ${dashTodayCustomers.length} customers today`);
                 displayRecentCustomers();
             } else {

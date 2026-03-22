@@ -70,6 +70,21 @@ exports.handleWhatsAppWebhook = async (req, res) => {
             }
 
             console.log(`✅ Existing customer: ${customerId} (${currentStatus} → ${customerStatus})`);
+
+            // Update Google Contact (nama bisa berubah dari pushname)
+            if (senderName && senderName !== existing[0].nama_lengkap) {
+                try {
+                    await googleService.saveContact({
+                        nama_lengkap: senderName,
+                        whatsapp: cleanPhone,
+                        tipe: existing[0].tipe || 'Chat Only'
+                    });
+                    await db.query('UPDATE customers SET nama_lengkap = $1 WHERE id = $2', [senderName, customerId]);
+                    console.log(`✅ Google Contact updated: ${existing[0].nama_lengkap} → ${senderName}`);
+                } catch (gcErr) {
+                    console.warn('⚠️ Google Contact update failed:', gcErr.message);
+                }
+            }
         } else {
             let source = 'Unknown';
             const lowerMessage = message.toLowerCase();
