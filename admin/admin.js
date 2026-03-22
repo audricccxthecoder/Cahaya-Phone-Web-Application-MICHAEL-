@@ -441,7 +441,7 @@
 //         `;
 
 //         messages.forEach((msg, index) => {
-//             const time = new Date(msg.sent_at).toLocaleString('id-ID');
+//             const time = formatWaktu(msg.sent_at);
 //             const directionClass = msg.direction;
 //             const directionText = msg.direction === 'in' ? 'Masuk' : 'Keluar';
             
@@ -486,6 +486,24 @@
 // ============================================
 
 const API_URL = '/api';
+const TIMEZONE = 'Asia/Makassar'; // WITA (UTC+8) - Gorontalo
+
+// Helper: get date string YYYY-MM-DD in WITA timezone
+function toWITADate(date) {
+    const d = new Date(date);
+    return d.toLocaleDateString('sv-SE', { timeZone: TIMEZONE }); // sv-SE gives YYYY-MM-DD
+}
+
+// Helper: format date in Indonesian locale with WITA timezone
+function formatTanggal(date, options = {}) {
+    const defaults = { timeZone: TIMEZONE };
+    return new Date(date).toLocaleDateString('id-ID', { ...defaults, ...options });
+}
+
+// Helper: format date+time in Indonesian locale with WITA timezone
+function formatWaktu(date) {
+    return new Date(date).toLocaleString('id-ID', { timeZone: TIMEZONE });
+}
 
 // Global state
 let token = localStorage.getItem('token');
@@ -685,7 +703,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 // Pipeline stats
                 const d = stats.data;
                 const formatRp = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
-                const bulanNow = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                const bulanNow = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: TIMEZONE });
 
                 document.getElementById('pipelinePeriod').textContent = bulanNow;
                 document.getElementById('pipelineActive').textContent = d.pipeline_active || 0;
@@ -741,14 +759,8 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             const customers = await apiCall('/admin/customers');
 
             if (customers && customers.success) {
-                const now = new Date();
-                const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-                dashTodayCustomers = customers.data.filter(c => {
-                    if (!c.created_at) return false;
-                    const d = new Date(c.created_at);
-                    const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                    return localDate === today;
-                });
+                const today = toWITADate(new Date());
+                dashTodayCustomers = customers.data.filter(c => c.created_at && toWITADate(c.created_at) === today);
                 console.log(`✅ Loaded ${dashTodayCustomers.length} customers today`);
                 displayRecentCustomers();
             } else {
@@ -955,7 +967,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             </tr></thead><tbody>`;
 
         pageData.forEach((customer, index) => {
-            const date = new Date(customer.created_at).toLocaleDateString('id-ID');
+            const date = formatTanggal(customer.created_at);
             const sourceClass = String(customer.source || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
             const statusClass = String(customer.status || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
 
@@ -1084,9 +1096,9 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         const detail = document.getElementById('customerDetail');
         const formatRpDetail = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
 
-        const date = new Date(customer.created_at).toLocaleString('id-ID');
+        const date = formatWaktu(customer.created_at);
         const harga = customer.harga ? formatRpDetail(customer.harga) : '-';
-        const tanggalLahir = customer.tanggal_lahir ? new Date(customer.tanggal_lahir).toLocaleDateString('id-ID') : '-';
+        const tanggalLahir = customer.tanggal_lahir ? formatTanggal(customer.tanggal_lahir) : '-';
         const sourceClass = String(customer.source || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
         const statusClass = String(customer.status || '').toLowerCase().replace(/[^a-z0-9]+/g,'-');
 
@@ -1113,7 +1125,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                         <tbody>
                             ${purchases.map(p => `
                                 <tr>
-                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${new Date(p.created_at).toLocaleDateString('id-ID')}</td>
+                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${formatTanggal(p.created_at)}</td>
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-weight:500;">${(p.merk_unit || '') + (p.tipe_unit ? ' ' + p.tipe_unit : '') || '-'}</td>
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;text-align:right;">${p.harga ? formatRpDetail(p.harga) : '-'}</td>
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${p.nama_sales || '-'}</td>
@@ -1341,7 +1353,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `backup-logs-${new Date().toISOString().slice(0,10)}.csv`;
+            a.download = `backup-logs-${toWITADate(new Date())}.csv`;
             a.click();
             URL.revokeObjectURL(url);
             alert('Export berhasil! File CSV sudah didownload.');
@@ -1362,7 +1374,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `backup-logs-${new Date().toISOString().slice(0,10)}.csv`;
+            a.download = `backup-logs-${toWITADate(new Date())}.csv`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (e) {
@@ -1447,7 +1459,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         `;
 
         messages.forEach((msg, index) => {
-            const time = new Date(msg.sent_at).toLocaleString('id-ID');
+            const time = formatWaktu(msg.sent_at);
             const directionClass = msg.direction;
             const directionText = msg.direction === 'in' ? 'Masuk' : 'Keluar';
             
@@ -1507,7 +1519,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            const today = new Date().toISOString().slice(0, 10);
+            const today = toWITADate(new Date());
             const prefix = format === 'simple' ? 'contacts' : 'customers';
             link.href = url;
             link.download = `${prefix}_${today}.csv`;
@@ -1539,7 +1551,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            const today = new Date().toISOString().slice(0, 10);
+            const today = toWITADate(new Date());
             link.href = url;
             link.download = `cahaya_phone_contacts_${today}.vcf`;
             link.click();
@@ -1965,7 +1977,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         </tr></thead><tbody>`;
 
         invoices.forEach(inv => {
-            const date = new Date(inv.created_at).toLocaleDateString('id-ID');
+            const date = formatTanggal(inv.created_at);
             const notaUrl = `${window.location.origin}/nota/?t=${inv.token}`;
             const waText = encodeURIComponent(`Halo ${inv.nama_lengkap}, terima kasih sudah belanja di *Cahaya Phone*! Berikut nota pembelian Anda:\n\n${notaUrl}\n\nSimpan sebagai bukti pembelian. Terima kasih!`);
             const waLink = `https://wa.me/${inv.whatsapp}?text=${waText}`;
@@ -2016,7 +2028,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:13px;">
                 <div><span style="color:#8C8078;">No. Nota:</span><br><strong>${inv.invoice_number}</strong></div>
-                <div><span style="color:#8C8078;">Tanggal:</span><br><strong>${new Date(inv.created_at).toLocaleDateString('id-ID')}</strong></div>
+                <div><span style="color:#8C8078;">Tanggal:</span><br><strong>${formatTanggal(inv.created_at)}</strong></div>
                 <div><span style="color:#8C8078;">Customer:</span><br><strong>${inv.nama_lengkap}</strong></div>
                 <div><span style="color:#8C8078;">WhatsApp:</span><br><strong>${inv.whatsapp}</strong></div>
             </div>
