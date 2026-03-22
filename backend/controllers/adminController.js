@@ -1001,7 +1001,7 @@ exports.processBroadcast = async (req, res) => {
 
             // Anti-spam: variasi pesan agar tidak identik
             const message = variasiPesan(job.message, recipient.customer_name);
-            const result = await whatsappService.sendMessage(recipient.customer_phone, message);
+            const result = await whatsappService.sendBroadcastMessage(recipient.customer_phone, message);
 
             const status = result.success ? 'sent' : 'failed';
 
@@ -1295,4 +1295,85 @@ exports.getTopBrands = async (req, res) => {
         console.error('❌ Top brands error:', error);
         res.status(500).json({ success: false, message: 'Gagal mengambil data' });
     }
+};
+
+// ============================================
+// WA BRIDGE PROXY ENDPOINTS
+// ============================================
+
+const axios = require('axios');
+const WA_BRIDGE_URL = process.env.WA_BRIDGE_URL || '';
+const WA_BRIDGE_SECRET = process.env.WA_BRIDGE_SECRET || 'cahaya-phone-secret-key';
+
+async function waBridgeRequest(method, path, data = null) {
+    if (!WA_BRIDGE_URL) {
+        return { success: false, error: 'WA Bridge URL not configured (WA_BRIDGE_URL)' };
+    }
+    try {
+        const config = {
+            method,
+            url: `${WA_BRIDGE_URL}${path}`,
+            headers: { 'X-WA-Secret': WA_BRIDGE_SECRET, 'Content-Type': 'application/json' },
+            timeout: 10000
+        };
+        if (data) config.data = data;
+        const response = await axios(config);
+        return response.data;
+    } catch (error) {
+        return { success: false, error: error.response?.data?.error || error.message };
+    }
+}
+
+/**
+ * Get WA Bridge connection status (QR, connected info, etc)
+ * GET /api/admin/wa/status
+ */
+exports.getWABridgeStatus = async (req, res) => {
+    const result = await waBridgeRequest('GET', '/api/status');
+    res.json(result);
+};
+
+/**
+ * Update auto-reply settings
+ * POST /api/admin/wa/auto-reply
+ */
+exports.updateWAAutoReply = async (req, res) => {
+    const result = await waBridgeRequest('POST', '/api/auto-reply', req.body);
+    res.json(result);
+};
+
+/**
+ * Get auto-reply settings
+ * GET /api/admin/wa/auto-reply
+ */
+exports.getWAAutoReply = async (req, res) => {
+    const result = await waBridgeRequest('GET', '/api/auto-reply');
+    res.json(result);
+};
+
+/**
+ * Disconnect WhatsApp
+ * POST /api/admin/wa/disconnect
+ */
+exports.disconnectWA = async (req, res) => {
+    const result = await waBridgeRequest('POST', '/api/disconnect');
+    res.json(result);
+};
+
+/**
+ * Restart WhatsApp client (regenerate QR)
+ * POST /api/admin/wa/restart
+ */
+exports.restartWA = async (req, res) => {
+    const result = await waBridgeRequest('POST', '/api/restart');
+    res.json(result);
+};
+
+/**
+ * Update WA Bridge settings (daily limit, etc)
+ * POST /api/admin/wa/settings
+ */
+exports.updateWASettings = async (req, res) => {
+    const result = await waBridgeRequest('POST', '/api/settings', req.body);
+    res.json(result);
 };

@@ -1,0 +1,18 @@
+{
+  "name": "cahaya-phone-wa-bridge",
+  "version": "1.0.0",
+  "description": "WhatsApp Bridge for Cahaya Phone - self-hosted via whatsapp-web.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "whatsapp-web.js": "^1.26.1-alpha.3",
+    "qrcode": "^1.5.3",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

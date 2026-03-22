@@ -617,6 +617,9 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 loadAnalytics();
             } else if (targetPage === 'invoices') {
                 loadInvoices();
+            } else if (targetPage === 'waconnect') {
+                loadWAStatus();
+                loadWAAutoReply();
             } else if (targetPage === 'messages') {
                 loadMessages();
             }
@@ -1335,6 +1338,187 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             alert('Gagal export vCard. Pastikan koneksi ke server OK.');
         }
     });
+
+    // ============================================
+    // WA CONNECT
+    // ============================================
+
+    let waStatusInterval = null;
+
+    window.loadWAStatus = async function() {
+        const container = document.getElementById('waStatusContainer');
+        const res = await apiCall('/admin/wa/status');
+
+        if (!res || !res.success) {
+            const errorMsg = res?.error || 'Tidak bisa terhubung ke WA Bridge';
+            container.innerHTML = `
+                <div style="text-align:center;padding:30px;">
+                    <div style="font-size:48px;margin-bottom:12px;">&#x26A0;</div>
+                    <h4 style="margin:0 0 8px;color:#DC2626;">WA Bridge Tidak Tersedia</h4>
+                    <p class="muted" style="margin:0 0 16px;">${errorMsg}</p>
+                    <p class="muted" style="font-size:12px;">Pastikan WA Bridge sudah di-deploy di Railway dan WA_BRIDGE_URL sudah diset di environment variables.</p>
+                </div>
+            `;
+            // Stop polling
+            if (waStatusInterval) { clearInterval(waStatusInterval); waStatusInterval = null; }
+            return;
+        }
+
+        const { status, qr, info, messagesSentToday, dailyLimit } = res;
+
+        // Update daily stats on the settings section
+        const sentEl = document.getElementById('waSentToday');
+        if (sentEl) sentEl.textContent = `${messagesSentToday || 0} / ${dailyLimit || 200}`;
+        const limitEl = document.getElementById('waDailyLimit');
+        if (limitEl && dailyLimit) limitEl.value = dailyLimit;
+
+        if (status === 'ready' && info) {
+            // Connected
+            container.innerHTML = `
+                <div style="text-align:center;padding:20px;">
+                    <div style="width:80px;height:80px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.66 0-3.203-.51-4.484-1.375l-.316-.191-2.789.828.779-2.715-.215-.336A7.943 7.943 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/></svg>
+                    </div>
+                    <h3 style="margin:0 0 4px;color:#25D366;">WhatsApp Terhubung</h3>
+                    <p style="margin:0 0 4px;font-size:16px;font-weight:600;">${info.name || '-'}</p>
+                    <p class="muted" style="margin:0 0 4px;">+${info.phone}</p>
+                    <p class="muted" style="margin:0;font-size:12px;">Platform: ${info.platform || '-'}</p>
+                    <div style="margin-top:16px;padding:12px;background:rgba(37,211,102,0.08);border-radius:8px;">
+                        <span style="font-size:13px;">Pesan terkirim hari ini: <strong style="color:#25D366;">${messagesSentToday || 0}</strong> / ${dailyLimit || 200}</span>
+                    </div>
+                </div>
+            `;
+            // Stop polling when connected
+            if (waStatusInterval) { clearInterval(waStatusInterval); waStatusInterval = null; }
+
+        } else if (status === 'qr_pending' && qr) {
+            // Show QR code
+            container.innerHTML = `
+                <div style="text-align:center;padding:20px;">
+                    <h4 style="margin:0 0 12px;">Scan QR Code dengan WhatsApp</h4>
+                    <p class="muted" style="margin:0 0 16px;font-size:13px;">Buka WhatsApp > Menu > Linked Devices > Link a Device</p>
+                    <img src="${qr}" alt="QR Code" style="width:280px;height:280px;border:2px solid #EDE8E3;border-radius:12px;">
+                    <p class="muted" style="margin:16px 0 0;font-size:12px;">QR akan refresh otomatis...</p>
+                </div>
+            `;
+            // Start polling for status updates (every 3 seconds while QR is showing)
+            if (!waStatusInterval) {
+                waStatusInterval = setInterval(loadWAStatus, 3000);
+            }
+
+        } else if (status === 'authenticated') {
+            container.innerHTML = `
+                <div style="text-align:center;padding:30px;">
+                    <div class="loading">Menghubungkan WhatsApp...</div>
+                    <p class="muted" style="margin-top:8px;">Authenticated, sedang loading...</p>
+                </div>
+            `;
+            if (!waStatusInterval) {
+                waStatusInterval = setInterval(loadWAStatus, 3000);
+            }
+
+        } else {
+            // Disconnected or error
+            container.innerHTML = `
+                <div style="text-align:center;padding:30px;">
+                    <div style="font-size:48px;margin-bottom:12px;">&#x1F4F1;</div>
+                    <h4 style="margin:0 0 8px;">WhatsApp Belum Terhubung</h4>
+                    <p class="muted" style="margin:0 0 16px;">Status: ${status}${res.lastError ? ' - ' + res.lastError : ''}</p>
+                    <button class="btn-primary" style="width:auto;" onclick="restartWA()">Mulai Koneksi (Generate QR)</button>
+                </div>
+            `;
+            if (waStatusInterval) { clearInterval(waStatusInterval); waStatusInterval = null; }
+        }
+    };
+
+    window.loadWAAutoReply = async function() {
+        const res = await apiCall('/admin/wa/auto-reply');
+        if (res && res.success) {
+            const toggle = document.getElementById('waAutoReplyToggle');
+            const slider = document.getElementById('waAutoReplySlider');
+            const statusEl = document.getElementById('waAutoReplyStatus');
+            const msgEl = document.getElementById('waAutoReplyMessage');
+
+            toggle.checked = res.autoReply;
+            slider.style.background = res.autoReply ? '#25D366' : '#ccc';
+            statusEl.textContent = res.autoReply ? 'Aktif' : 'Nonaktif';
+            statusEl.style.color = res.autoReply ? '#25D366' : '#8C8078';
+            if (res.autoReplyMessage) msgEl.value = res.autoReplyMessage;
+        }
+    };
+
+    window.toggleWAAutoReply = async function() {
+        const toggle = document.getElementById('waAutoReplyToggle');
+        const slider = document.getElementById('waAutoReplySlider');
+        const statusEl = document.getElementById('waAutoReplyStatus');
+
+        const enabled = toggle.checked;
+        slider.style.background = enabled ? '#25D366' : '#ccc';
+        statusEl.textContent = enabled ? 'Aktif' : 'Nonaktif';
+        statusEl.style.color = enabled ? '#25D366' : '#8C8078';
+
+        await apiCall('/admin/wa/auto-reply', {
+            method: 'POST',
+            body: JSON.stringify({ enabled })
+        });
+    };
+
+    window.saveWAAutoReply = async function() {
+        const message = document.getElementById('waAutoReplyMessage').value.trim();
+        const enabled = document.getElementById('waAutoReplyToggle').checked;
+        if (!message) { alert('Pesan auto-reply tidak boleh kosong!'); return; }
+
+        const res = await apiCall('/admin/wa/auto-reply', {
+            method: 'POST',
+            body: JSON.stringify({ enabled, message })
+        });
+        if (res && res.success) {
+            alert('Auto-reply berhasil disimpan!');
+        } else {
+            alert('Gagal menyimpan: ' + (res?.error || 'Unknown error'));
+        }
+    };
+
+    window.saveWASettings = async function() {
+        const dailyLimit = parseInt(document.getElementById('waDailyLimit').value);
+        if (!dailyLimit || dailyLimit < 10) { alert('Limit minimal 10 pesan/hari'); return; }
+
+        const res = await apiCall('/admin/wa/settings', {
+            method: 'POST',
+            body: JSON.stringify({ dailyLimit })
+        });
+        if (res && res.success) {
+            alert('Settings berhasil disimpan!');
+        } else {
+            alert('Gagal menyimpan: ' + (res?.error || 'Unknown error'));
+        }
+    };
+
+    window.disconnectWA = async function() {
+        if (!confirm('Yakin mau disconnect WhatsApp? Anda perlu scan QR ulang nanti.')) return;
+
+        const res = await apiCall('/admin/wa/disconnect', { method: 'POST', body: '{}' });
+        if (res && res.success) {
+            alert('WhatsApp berhasil di-disconnect.');
+            loadWAStatus();
+        } else {
+            alert('Gagal disconnect: ' + (res?.error || 'Unknown error'));
+        }
+    };
+
+    window.restartWA = async function() {
+        const container = document.getElementById('waStatusContainer');
+        container.innerHTML = '<div class="loading">Restarting WhatsApp client...</div>';
+
+        const res = await apiCall('/admin/wa/restart', { method: 'POST', body: '{}' });
+        if (res && res.success) {
+            // Start polling for QR
+            setTimeout(loadWAStatus, 2000);
+        } else {
+            alert('Gagal restart: ' + (res?.error || 'Unknown error'));
+            loadWAStatus();
+        }
+    };
 
     // ============================================
     // BROADCAST

@@ -1,55 +1,115 @@
 // ============================================
 // WHATSAPP SERVICE
-// Stateless — broadcast state lives in DB
+// Kirim pesan via WA Bridge (whatsapp-web.js)
+// Fallback ke Fonnte jika WA Bridge tidak tersedia
 // ============================================
 
 const axios = require('axios');
 const { sanitizePhone } = require('../utils/phoneUtils');
 require('dotenv').config();
 
-function _sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 class WhatsAppService {
     constructor() {
+        // WA Bridge config (primary)
+        this.bridgeUrl = process.env.WA_BRIDGE_URL || '';
+        this.bridgeSecret = process.env.WA_BRIDGE_SECRET || 'cahaya-phone-secret-key';
+
+        // Fonnte config (fallback / legacy)
         this.apiUrl = process.env.WHATSAPP_API_URL;
         this.apiKey = process.env.WHATSAPP_API_KEY;
-        // Simple rate limiter: track last send time
+
+        // Rate limiter for Fonnte fallback
         this._lastSent = 0;
-        this._minInterval = 1000; // min 1 second between any messages
+        this._minInterval = 1000;
+    }
+
+    /**
+     * Cek apakah WA Bridge aktif
+     */
+    get useBridge() {
+        return !!this.bridgeUrl;
     }
 
     /**
      * Send a single WhatsApp message
-     * @param {string} phoneNumber - Raw or normalized phone number
-     * @param {string} message
      */
     async sendMessage(phoneNumber, message) {
+        const formattedNumber = sanitizePhone(phoneNumber);
+        if (!formattedNumber || !formattedNumber.startsWith('62')) {
+            return { success: false, error: 'Invalid phone number', phone: phoneNumber };
+        }
+
+        // Pakai WA Bridge jika tersedia
+        if (this.useBridge) {
+            return this._sendViaBridge(formattedNumber, message, false);
+        }
+
+        // Fallback ke Fonnte
+        return this._sendViaFonnte(formattedNumber, message);
+    }
+
+    /**
+     * Send broadcast message (pakai delay lebih lama di WA Bridge)
+     */
+    async sendBroadcastMessage(phoneNumber, message) {
+        const formattedNumber = sanitizePhone(phoneNumber);
+        if (!formattedNumber || !formattedNumber.startsWith('62')) {
+            return { success: false, error: 'Invalid phone number', phone: phoneNumber };
+        }
+
+        if (this.useBridge) {
+            return this._sendViaBridge(formattedNumber, message, true);
+        }
+
+        return this._sendViaFonnte(formattedNumber, message);
+    }
+
+    /**
+     * Kirim via WA Bridge (whatsapp-web.js di Railway)
+     */
+    async _sendViaBridge(phone, message, isBroadcast) {
         try {
-            const formattedNumber = sanitizePhone(phoneNumber);
+            const endpoint = isBroadcast ? '/api/send-broadcast' : '/api/send';
+            const response = await axios.post(`${this.bridgeUrl}${endpoint}`, {
+                phone,
+                message
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WA-Secret': this.bridgeSecret
+                },
+                timeout: 30000 // 30s timeout (broadcast punya delay)
+            });
 
-            if (!formattedNumber || !formattedNumber.startsWith('62')) {
-                return { success: false, error: 'Invalid phone number', phone: phoneNumber };
-            }
+            console.log(`[WA Bridge] Sent to ${phone}`);
+            return { success: true, phone, data: response.data };
+        } catch (error) {
+            const errMsg = error.response?.data?.error || error.message;
+            console.error(`[WA Bridge] Failed to ${phone}:`, errMsg);
+            return { success: false, phone, error: errMsg };
+        }
+    }
 
-            // Simple rate limiting: wait if last send was too recent
+    /**
+     * Kirim via Fontte API (fallback/legacy)
+     */
+    async _sendViaFonnte(phone, message) {
+        try {
+            // Rate limiting
             const now = Date.now();
             const elapsed = now - this._lastSent;
             if (elapsed < this._minInterval) {
-                await _sleep(this._minInterval - elapsed);
+                await new Promise(r => setTimeout(r, this._minInterval - elapsed));
             }
             this._lastSent = Date.now();
 
-            console.log(`📤 Sending WhatsApp to: ${formattedNumber}`);
-
             if (!this.apiUrl || !this.apiKey) {
-                console.warn('⚠️ WhatsApp API not configured (WHATSAPP_API_URL / WHATSAPP_API_KEY missing)');
-                return { success: false, error: 'WhatsApp API not configured', phone: formattedNumber };
+                console.warn('[Fonnte] API not configured');
+                return { success: false, error: 'WhatsApp API not configured', phone };
             }
 
             const response = await axios.post(this.apiUrl, {
-                target: formattedNumber,
+                target: phone,
                 message: message,
                 countryCode: '62'
             }, {
@@ -60,17 +120,30 @@ class WhatsAppService {
                 timeout: 10000
             });
 
-            console.log(`✅ WhatsApp sent to ${formattedNumber}`);
-            return { success: true, phone: formattedNumber, data: response.data };
-
+            console.log(`[Fonnte] Sent to ${phone}`);
+            return { success: true, phone, data: response.data };
         } catch (error) {
-            console.error(`❌ WhatsApp send failed to ${phoneNumber}:`, error.message);
-            return {
-                success: false,
-                phone: phoneNumber,
-                error: error.message,
-                details: error.response?.data
-            };
+            console.error(`[Fonnte] Failed to ${phone}:`, error.message);
+            return { success: false, phone, error: error.message };
+        }
+    }
+
+    /**
+     * Get WA Bridge connection status
+     */
+    async getBridgeStatus() {
+        if (!this.useBridge) {
+            return { connected: false, mode: 'fonnte', message: 'Using Fonnte API (no WA Bridge configured)' };
+        }
+
+        try {
+            const response = await axios.get(`${this.bridgeUrl}/api/status`, {
+                headers: { 'X-WA-Secret': this.bridgeSecret },
+                timeout: 5000
+            });
+            return { connected: true, mode: 'bridge', ...response.data };
+        } catch (error) {
+            return { connected: false, mode: 'bridge', error: error.message };
         }
     }
 
@@ -78,12 +151,12 @@ class WhatsAppService {
      * Auto-reply after customer submits form
      */
     async sendAutoReply(customer) {
-        const message = `Hai Kak ${customer.nama_lengkap} 😊\nTerima Kasih Banyak sudah berbelanja di toko kami CAHAYA PHONE 🙏🏾🙏🏾\nSemoga puas dan cocok dengan produknya. Jangan sungkan untuk menghubungi kami lagi ya.. 😊`;
+        const message = `Hai Kak ${customer.nama_lengkap} \nTerima Kasih Banyak sudah berbelanja di toko kami CAHAYA PHONE \nSemoga puas dan cocok dengan produknya. Jangan sungkan untuk menghubungi kami lagi ya..`;
         return await this.sendMessage(customer.whatsapp, message);
     }
 
     /**
-     * Welcome message for WhatsApp webhook (customer dari Instagram/sosmed)
+     * Welcome message for incoming WhatsApp chat
      */
     async sendWelcomeMessage(phoneNumber, customerName = '') {
         const name = customerName || 'Kak';

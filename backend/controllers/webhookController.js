@@ -17,8 +17,14 @@ exports.handleWhatsAppWebhook = async (req, res) => {
 
         let phoneNumber, message, senderName;
 
+        // Format WA Bridge (whatsapp-web.js)
+        if (req.body.source === 'wa-bridge') {
+            phoneNumber = req.body.sender;
+            message = req.body.message;
+            senderName = req.body.pushname || '';
+        }
         // Format Fonnte
-        if (req.body.sender) {
+        else if (req.body.sender) {
             phoneNumber = req.body.sender;
             message = req.body.message;
             senderName = req.body.member?.name || '';

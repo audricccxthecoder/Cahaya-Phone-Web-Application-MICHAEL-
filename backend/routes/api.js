@@ -98,4 +98,12 @@ router.post('/admin/broadcast/resume', authMiddleware, adminController.resumeBro
 router.get('/admin/broadcast/status', authMiddleware, adminController.getBroadcastStatus);
 router.get('/admin/broadcast/daily-count', authMiddleware, adminController.getDailySentCount);
 
+// WA Bridge proxy routes (admin dashboard → WA Bridge service)
+router.get('/admin/wa/status', authMiddleware, adminController.getWABridgeStatus);
+router.post('/admin/wa/auto-reply', authMiddleware, adminController.updateWAAutoReply);
+router.get('/admin/wa/auto-reply', authMiddleware, adminController.getWAAutoReply);
+router.post('/admin/wa/disconnect', authMiddleware, adminController.disconnectWA);
+router.post('/admin/wa/restart', authMiddleware, adminController.restartWA);
+router.post('/admin/wa/settings', authMiddleware, adminController.updateWASettings);
+
 module.exports = router;
