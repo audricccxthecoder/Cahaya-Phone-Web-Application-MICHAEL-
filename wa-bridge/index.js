@@ -288,26 +288,10 @@ waClient.on('message', async (msg) => {
         }
     }
 
-    // Auto-reply untuk customer baru (pertama kali chat)
-    if (clientState.autoReply && canSendMessage()) {
-        try {
-            const chat = await msg.getChat();
-            const messages = await chat.fetchMessages({ limit: 5 });
-            // Cek apakah ini pesan pertama dari customer (belum pernah kita balas)
-            const ourReplies = messages.filter(m => m.fromMe);
-            if (ourReplies.length === 0) {
-                // Pesan pertama - kirim auto reply
-                const reply = autoReplyMessage.replace(/{nama}/gi, senderName || 'Kak');
-                await randomDelay(3000, 6000); // Delay natural sebelum reply
-                await waClient.sendMessage(msg.from, reply);
-                ANTI_BAN.sentCount++;
-                clientState.messagesSentToday = ANTI_BAN.sentCount;
-                console.log(`[AUTO-REPLY] Sent to ${phone}`);
-            }
-        } catch (err) {
-            console.error('[AUTO-REPLY] Error:', err.message);
-        }
-    }
+    // Auto-reply untuk chat masuk DINONAKTIFKAN dari wa-bridge
+    // Auto-reply hanya dikirim saat customer submit form (via formController)
+    // Chat manual di WA → hanya auto-save kontak, reply biarkan dari fitur WA Business bawaan
+    console.log(`[AUTO-REPLY] Skipped - auto-reply only for form submissions`);
 });
 
 // Disconnected event

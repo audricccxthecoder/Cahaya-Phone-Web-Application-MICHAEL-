@@ -121,14 +121,10 @@ exports.handleWhatsAppWebhook = async (req, res) => {
                 console.warn('⚠️ Google Contact save failed:', gcErr.message);
             }
 
-            try {
-                const waResult = await whatsappService.sendWelcomeMessage(cleanPhone, senderName);
-                const waSent = waResult && waResult.success;
-                await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customerId]);
-            } catch (waErr) {
-                console.warn('⚠️ Welcome message failed:', waErr.message);
-                await db.query('UPDATE customers SET wa_sent = FALSE WHERE id = $1', [customerId]);
-            }
+            // Auto-reply untuk chat manual DINONAKTIFKAN
+            // Auto-reply hanya untuk customer yang submit form (formController)
+            // Chat manual → hanya auto-save kontak, reply biarkan dari fitur WA Business bawaan
+            console.log(`✅ Chat manual - no auto-reply, only save contact`);
         }
 
         await db.query(
