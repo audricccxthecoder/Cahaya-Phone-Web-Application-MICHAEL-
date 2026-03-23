@@ -1,51 +1,29 @@
 // ============================================
 // WEBHOOK CONTROLLER
 // Handle incoming WhatsApp messages
+//
+// ATURAN EMAS:
+// - Chat manual (Skenario B): HANYA save DB + Google Contact
+//   Format: "Customer - DD/MM/YYYY". TIDAK kirim auto-reply.
+// - Auto-reply HANYA dari formController (Skenario A).
 // ============================================
 
 const db = require('../config/database');
-const whatsappService = require('../config/whatsapp');
 const googleService = require('../config/google');
 
 /**
- * Webhook untuk menerima pesan WhatsApp masuk
- * POST /api/webhook/whatsapp
+ * Handle incoming message dari WA Client (event internal, bukan HTTP)
+ * Dipanggil langsung dari server.js saat WA Client emit 'message_received'
  */
-exports.handleWhatsAppWebhook = async (req, res) => {
+exports.handleIncomingMessage = async (data) => {
     try {
-        console.log('📥 Webhook received:', JSON.stringify(req.body, null, 2));
-
-        let phoneNumber, message, senderName;
-
-        // Format WA Bridge (whatsapp-web.js)
-        if (req.body.source === 'wa-bridge') {
-            phoneNumber = req.body.sender;
-            message = req.body.message;
-            senderName = req.body.pushname || '';
-        }
-        // Format Fonnte
-        else if (req.body.sender) {
-            phoneNumber = req.body.sender;
-            message = req.body.message;
-            senderName = req.body.member?.name || '';
-        }
-        // Format Wablas
-        else if (req.body.phone) {
-            phoneNumber = req.body.phone;
-            message = req.body.message;
-            senderName = req.body.pushname || '';
-        }
-        else {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid webhook payload'
-            });
-        }
-
+        const { sender: phoneNumber, message, pushname: senderName } = data;
         const cleanPhone = phoneNumber.replace(/\D/g, '');
 
+        console.log(`[WEBHOOK] Processing: ${senderName} (${cleanPhone}): ${message.substring(0, 50)}...`);
+
         const { rows: existing } = await db.query(
-            'SELECT id, nama_lengkap, status FROM customers WHERE whatsapp = $1',
+            'SELECT id, nama_lengkap, status, tipe FROM customers WHERE whatsapp = $1',
             [cleanPhone]
         );
 
@@ -53,25 +31,21 @@ exports.handleWhatsAppWebhook = async (req, res) => {
         let customerStatus;
 
         if (existing.length > 0) {
+            // Customer sudah ada
             customerId = existing[0].id;
             const currentStatus = existing[0].status;
 
-            // Auto status transitions on incoming chat:
-            // New → Contacted, Inactive → Contacted, Follow Up → Contacted
-            // Completed stays Completed (sudah beli)
+            // Auto status transitions
             if (['New', 'Inactive', 'Follow Up'].includes(currentStatus)) {
-                await db.query(
-                    'UPDATE customers SET status = $1 WHERE id = $2',
-                    ['Contacted', customerId]
-                );
+                await db.query('UPDATE customers SET status = $1 WHERE id = $2', ['Contacted', customerId]);
                 customerStatus = 'Contacted';
             } else {
                 customerStatus = currentStatus;
             }
 
-            console.log(`✅ Existing customer: ${customerId} (${currentStatus} → ${customerStatus})`);
+            console.log(`[WEBHOOK] Existing customer: ${customerId} (${currentStatus} -> ${customerStatus})`);
 
-            // Update Google Contact (nama bisa berubah dari pushname)
+            // Update nama dari pushname jika berubah
             if (senderName && senderName !== existing[0].nama_lengkap) {
                 try {
                     await googleService.saveContact({
@@ -80,12 +54,17 @@ exports.handleWhatsAppWebhook = async (req, res) => {
                         tipe: existing[0].tipe || 'Chat Only'
                     });
                     await db.query('UPDATE customers SET nama_lengkap = $1 WHERE id = $2', [senderName, customerId]);
-                    console.log(`✅ Google Contact updated: ${existing[0].nama_lengkap} → ${senderName}`);
+                    console.log(`[WEBHOOK] Google Contact updated: ${existing[0].nama_lengkap} -> ${senderName}`);
                 } catch (gcErr) {
-                    console.warn('⚠️ Google Contact update failed:', gcErr.message);
+                    console.warn('[WEBHOOK] Google Contact update failed:', gcErr.message);
                 }
             }
         } else {
+            // ============================================
+            // SKENARIO B: Customer BARU chat manual
+            // Save ke DB + Google Contact ("Customer - Tanggal")
+            // TIDAK kirim auto-reply — biarkan WA Business bawaan
+            // ============================================
             let source = 'Unknown';
             const lowerMessage = message.toLowerCase();
 
@@ -107,9 +86,9 @@ exports.handleWhatsAppWebhook = async (req, res) => {
             customerId = inserted[0].id;
             customerStatus = 'New';
 
-            console.log(`✅ New customer created from ${source}: ${customerId}`);
+            console.log(`[WEBHOOK] New customer (Chat Only): ${customerId} — NO auto-reply`);
 
-            // Auto-save to Google Contacts
+            // Auto-save ke Google Contacts (format: "Customer - DD/MM/YYYY")
             try {
                 await googleService.saveContact({
                     nama_lengkap: customerName,
@@ -118,37 +97,72 @@ exports.handleWhatsAppWebhook = async (req, res) => {
                     tipe: 'Chat Only'
                 });
             } catch (gcErr) {
-                console.warn('⚠️ Google Contact save failed:', gcErr.message);
+                console.warn('[WEBHOOK] Google Contact save failed:', gcErr.message);
             }
 
-            // Auto-reply untuk chat manual DINONAKTIFKAN
-            // Auto-reply hanya untuk customer yang submit form (formController)
-            // Chat manual → hanya auto-save kontak, reply biarkan dari fitur WA Business bawaan
-            console.log(`✅ Chat manual - no auto-reply, only save contact`);
+            // BERHENTI DI SINI. TIDAK kirim auto-reply.
+            // WA Business bawaan yang handle reply.
         }
 
+        // Simpan pesan ke database
         await db.query(
             'INSERT INTO messages (customer_id, direction, message) VALUES ($1, $2, $3)',
             [customerId, 'in', message]
         );
 
-        console.log(`✅ Message saved for customer: ${customerId}`);
-
-        res.json({
-            success: true,
-            message: 'Webhook processed successfully',
-            customer_id: customerId,
-            status: customerStatus
-        });
+        console.log(`[WEBHOOK] Message saved for customer: ${customerId}`);
+        return { success: true, customer_id: customerId, status: customerStatus };
 
     } catch (error) {
-        console.error('❌ Webhook error:', error);
+        console.error('[WEBHOOK] Error:', error);
+        return { success: false, error: error.message };
+    }
+};
 
-        res.json({
-            success: false,
-            message: 'Error processing webhook',
-            error: error.message
-        });
+/**
+ * HTTP Webhook endpoint (untuk Fonnte / external WA API fallback)
+ * POST /api/webhook/whatsapp
+ */
+exports.handleWhatsAppWebhook = async (req, res) => {
+    try {
+        console.log('[WEBHOOK HTTP] Received:', JSON.stringify(req.body, null, 2));
+
+        let data;
+
+        // Format WA Bridge / internal
+        if (req.body.source === 'wa-bridge') {
+            data = {
+                sender: req.body.sender,
+                message: req.body.message,
+                pushname: req.body.pushname || ''
+            };
+        }
+        // Format Fonnte
+        else if (req.body.sender) {
+            data = {
+                sender: req.body.sender,
+                message: req.body.message,
+                pushname: req.body.member?.name || ''
+            };
+        }
+        // Format Wablas
+        else if (req.body.phone) {
+            data = {
+                sender: req.body.phone,
+                message: req.body.message,
+                pushname: req.body.pushname || ''
+            };
+        }
+        else {
+            return res.status(400).json({ success: false, message: 'Invalid webhook payload' });
+        }
+
+        const result = await exports.handleIncomingMessage(data);
+        res.json(result);
+
+    } catch (error) {
+        console.error('[WEBHOOK HTTP] Error:', error);
+        res.json({ success: false, message: 'Error processing webhook', error: error.message });
     }
 };
 

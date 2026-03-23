@@ -7,9 +7,11 @@
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "backend/server.js"
-    }
+    { "src": "/config.js", "dest": "/config.js" },
+    { "src": "/customer/(.*)", "dest": "/customer/$1" },
+    { "src": "/admin/(.*)", "dest": "/admin/$1" },
+    { "src": "/nota/(.*)", "dest": "/nota/$1" },
+    { "src": "/api/(.*)", "dest": "backend/server.js" },
+    { "src": "/(.*)", "dest": "backend/server.js" }
   ]
 }

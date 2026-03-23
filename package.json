@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "WhatsApp CRM System with Customer Management and Admin Dashboard",
   "engines": {
-    "node": "24.x"
+    "node": ">=18.x"
   },
   "scripts": {
     "migrate": "cd backend && node migrate.js",

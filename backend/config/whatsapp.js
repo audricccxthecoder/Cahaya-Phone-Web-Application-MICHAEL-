@@ -1,7 +1,8 @@
 // ============================================
 // WHATSAPP SERVICE
-// Kirim pesan via WA Bridge (whatsapp-web.js)
-// Fallback ke Fonnte jika WA Bridge tidak tersedia
+// Semua logika kirim pesan ada di sini.
+// Pakai WA Client langsung (bukan HTTP ke bridge).
+// Fallback ke Fonnte jika WA Client tidak aktif.
 // ============================================
 
 const axios = require('axios');
@@ -10,9 +11,8 @@ require('dotenv').config();
 
 class WhatsAppService {
     constructor() {
-        // WA Bridge config (primary)
-        this.bridgeUrl = process.env.WA_BRIDGE_URL || '';
-        this.bridgeSecret = process.env.WA_BRIDGE_SECRET || 'cahaya-phone-secret-key';
+        // WA Client (terintegrasi, bukan HTTP)
+        this.waClient = null;
 
         // Fonnte config (fallback / legacy)
         this.apiUrl = process.env.WHATSAPP_API_URL;
@@ -24,10 +24,17 @@ class WhatsAppService {
     }
 
     /**
-     * Cek apakah WA Bridge aktif
+     * Set WA Client reference (dipanggil dari server.js saat init)
      */
-    get useBridge() {
-        return !!this.bridgeUrl;
+    setWAClient(client) {
+        this.waClient = client;
+    }
+
+    /**
+     * Cek apakah WA Client aktif dan ready
+     */
+    get isWAReady() {
+        return this.waClient && this.waClient.state && this.waClient.state.status === 'ready';
     }
 
     /**
@@ -39,9 +46,9 @@ class WhatsAppService {
             return { success: false, error: 'Invalid phone number', phone: phoneNumber };
         }
 
-        // Pakai WA Bridge jika tersedia
-        if (this.useBridge) {
-            return this._sendViaBridge(formattedNumber, message, false);
+        // Pakai WA Client langsung jika ready
+        if (this.isWAReady) {
+            return this.waClient.sendMessage(formattedNumber, message, false);
         }
 
         // Fallback ke Fonnte
@@ -49,7 +56,7 @@ class WhatsAppService {
     }
 
     /**
-     * Send broadcast message (pakai delay lebih lama di WA Bridge)
+     * Send broadcast message (delay lebih lama)
      */
     async sendBroadcastMessage(phoneNumber, message) {
         const formattedNumber = sanitizePhone(phoneNumber);
@@ -57,45 +64,18 @@ class WhatsAppService {
             return { success: false, error: 'Invalid phone number', phone: phoneNumber };
         }
 
-        if (this.useBridge) {
-            return this._sendViaBridge(formattedNumber, message, true);
+        if (this.isWAReady) {
+            return this.waClient.sendMessage(formattedNumber, message, true);
         }
 
         return this._sendViaFonnte(formattedNumber, message);
     }
 
     /**
-     * Kirim via WA Bridge (whatsapp-web.js di Railway)
-     */
-    async _sendViaBridge(phone, message, isBroadcast) {
-        try {
-            const endpoint = isBroadcast ? '/api/send-broadcast' : '/api/send';
-            const response = await axios.post(`${this.bridgeUrl}${endpoint}`, {
-                phone,
-                message
-            }, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-WA-Secret': this.bridgeSecret
-                },
-                timeout: 30000 // 30s timeout (broadcast punya delay)
-            });
-
-            console.log(`[WA Bridge] Sent to ${phone}`);
-            return { success: true, phone, data: response.data };
-        } catch (error) {
-            const errMsg = error.response?.data?.error || error.message;
-            console.error(`[WA Bridge] Failed to ${phone}:`, errMsg);
-            return { success: false, phone, error: errMsg };
-        }
-    }
-
-    /**
-     * Kirim via Fontte API (fallback/legacy)
+     * Kirim via Fonnte API (fallback/legacy)
      */
     async _sendViaFonnte(phone, message) {
         try {
-            // Rate limiting
             const now = Date.now();
             const elapsed = now - this._lastSent;
             if (elapsed < this._minInterval) {
@@ -105,7 +85,7 @@ class WhatsAppService {
 
             if (!this.apiUrl || !this.apiKey) {
                 console.warn('[Fonnte] API not configured');
-                return { success: false, error: 'WhatsApp API not configured', phone };
+                return { success: false, error: 'WhatsApp not connected and Fonnte API not configured', phone };
             }
 
             const response = await axios.post(this.apiUrl, {
@@ -129,82 +109,37 @@ class WhatsAppService {
     }
 
     /**
-     * Get WA Bridge connection status
-     */
-    async getBridgeStatus() {
-        if (!this.useBridge) {
-            return { connected: false, mode: 'fonnte', message: 'Using Fonnte API (no WA Bridge configured)' };
-        }
-
-        try {
-            const response = await axios.get(`${this.bridgeUrl}/api/status`, {
-                headers: { 'X-WA-Secret': this.bridgeSecret },
-                timeout: 5000
-            });
-            return { connected: true, mode: 'bridge', ...response.data };
-        } catch (error) {
-            return { connected: false, mode: 'bridge', error: error.message };
-        }
-    }
-
-    /**
-     * Ambil pesan auto-reply custom dari WA Bridge
-     */
-    async _getCustomAutoReply() {
-        if (!this.useBridge) return null;
-        try {
-            const response = await axios.get(`${this.bridgeUrl}/api/auto-reply`, {
-                headers: { 'X-WA-Secret': this.bridgeSecret },
-                timeout: 5000
-            });
-            if (response.data && response.data.autoReplyMessage) {
-                return response.data.autoReplyMessage;
-            }
-        } catch (e) {
-            // fallback ke default
-        }
-        return null;
-    }
-
-    /**
-     * Auto-reply after customer submits form
-     * Pakai pesan custom dari WA Bridge jika ada
+     * Auto-reply after customer submits FORM (Skenario A)
+     * HANYA dipanggil dari formController
      */
     async sendAutoReply(customer) {
         const defaultMsg = `Hai Kak ${customer.nama_lengkap}\nTerima Kasih Banyak sudah berbelanja di toko kami CAHAYA PHONE\nSemoga puas dan cocok dengan produknya. Jangan sungkan untuk menghubungi kami lagi ya..`;
-
-        let message = defaultMsg;
-        try {
-            const customMsg = await this._getCustomAutoReply();
-            if (customMsg) {
-                message = customMsg.replace(/{nama}/gi, customer.nama_lengkap || 'Kak');
-            }
-        } catch (e) {
-            // pakai default
-        }
-
-        return await this.sendMessage(customer.whatsapp, message);
+        return await this.sendMessage(customer.whatsapp, defaultMsg);
     }
 
     /**
-     * Welcome message for incoming WhatsApp chat
-     * Pakai pesan custom dari WA Bridge jika ada
+     * Get WA Client status (untuk admin dashboard)
      */
-    async sendWelcomeMessage(phoneNumber, customerName = '') {
-        const name = customerName || 'Kak';
-        const defaultMsg = `Halo ${name}, terima kasih sudah menghubungi Cahaya Phone! Tim kami akan segera membantu Anda.`;
-
-        let message = defaultMsg;
-        try {
-            const customMsg = await this._getCustomAutoReply();
-            if (customMsg) {
-                message = customMsg.replace(/{nama}/gi, name);
-            }
-        } catch (e) {
-            // pakai default
+    getStatus() {
+        if (!this.waClient) {
+            return {
+                success: true,
+                status: 'disconnected',
+                mode: this.apiUrl ? 'fonnte' : 'none',
+                message: 'WA Client not initialized (serverless mode)'
+            };
         }
+        return this.waClient.getStatus();
+    }
 
-        return await this.sendMessage(phoneNumber, message);
+    /**
+     * Get daily stats
+     */
+    getStats() {
+        if (!this.waClient) {
+            return { success: true, sentToday: 0, dailyLimit: 0, remaining: 0, queueLength: 0 };
+        }
+        return this.waClient.getStats();
     }
 }
 

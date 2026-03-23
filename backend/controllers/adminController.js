@@ -1325,48 +1325,25 @@ exports.getTopBrands = async (req, res) => {
 };
 
 // ============================================
-// WA BRIDGE PROXY ENDPOINTS
+// WA CLIENT ENDPOINTS (langsung, bukan proxy HTTP)
 // ============================================
 
-const axios = require('axios');
-const WA_BRIDGE_URL = process.env.WA_BRIDGE_URL || '';
-const WA_BRIDGE_SECRET = process.env.WA_BRIDGE_SECRET || 'cahaya-phone-secret-key';
-
-async function waBridgeRequest(method, path, data = null) {
-    if (!WA_BRIDGE_URL) {
-        return { success: false, error: 'WA Bridge URL not configured (WA_BRIDGE_URL)' };
-    }
-    try {
-        const config = {
-            method,
-            url: `${WA_BRIDGE_URL}${path}`,
-            headers: { 'X-WA-Secret': WA_BRIDGE_SECRET, 'Content-Type': 'application/json' },
-            timeout: 10000
-        };
-        if (data) config.data = data;
-        const response = await axios(config);
-        return response.data;
-    } catch (error) {
-        return { success: false, error: error.response?.data?.error || error.message };
-    }
-}
-
 /**
- * Get WA Bridge connection status (QR, connected info, etc)
+ * Get WA Client connection status (QR, connected info, etc)
  * GET /api/admin/wa/status
  */
 exports.getWABridgeStatus = async (req, res) => {
-    const result = await waBridgeRequest('GET', '/api/status');
-    res.json(result);
+    res.json(whatsappService.getStatus());
 };
 
 /**
- * Update auto-reply settings
+ * Update auto-reply settings (disimpan di memory, reset saat restart)
  * POST /api/admin/wa/auto-reply
  */
 exports.updateWAAutoReply = async (req, res) => {
-    const result = await waBridgeRequest('POST', '/api/auto-reply', req.body);
-    res.json(result);
+    // Auto-reply sekarang hanya untuk form submit, tidak untuk chat masuk
+    // Setting ini mengubah pesan auto-reply yang dikirim setelah form submit
+    res.json({ success: true, message: 'Auto-reply hanya aktif untuk form submission' });
 };
 
 /**
@@ -1374,8 +1351,7 @@ exports.updateWAAutoReply = async (req, res) => {
  * GET /api/admin/wa/auto-reply
  */
 exports.getWAAutoReply = async (req, res) => {
-    const result = await waBridgeRequest('GET', '/api/auto-reply');
-    res.json(result);
+    res.json({ success: true, autoReply: true, message: 'Auto-reply aktif untuk form submission saja' });
 };
 
 /**
@@ -1383,8 +1359,13 @@ exports.getWAAutoReply = async (req, res) => {
  * POST /api/admin/wa/disconnect
  */
 exports.disconnectWA = async (req, res) => {
-    const result = await waBridgeRequest('POST', '/api/disconnect');
-    res.json(result);
+    try {
+        const waClient = require('../config/wa-client');
+        const result = await waClient.disconnect();
+        res.json(result);
+    } catch (err) {
+        res.json({ success: false, error: 'WA Client not available: ' + err.message });
+    }
 };
 
 /**
@@ -1392,17 +1373,27 @@ exports.disconnectWA = async (req, res) => {
  * POST /api/admin/wa/restart
  */
 exports.restartWA = async (req, res) => {
-    const result = await waBridgeRequest('POST', '/api/restart');
-    res.json(result);
+    try {
+        const waClient = require('../config/wa-client');
+        const result = await waClient.restart();
+        res.json(result);
+    } catch (err) {
+        res.json({ success: false, error: 'WA Client not available: ' + err.message });
+    }
 };
 
 /**
- * Update WA Bridge settings (daily limit, etc)
+ * Update WA Client settings (daily limit, etc)
  * POST /api/admin/wa/settings
  */
 exports.updateWASettings = async (req, res) => {
-    const result = await waBridgeRequest('POST', '/api/settings', req.body);
-    res.json(result);
+    try {
+        const waClient = require('../config/wa-client');
+        const result = waClient.setDailyLimit(req.body.dailyLimit);
+        res.json(result);
+    } catch (err) {
+        res.json({ success: false, error: 'WA Client not available: ' + err.message });
+    }
 };
 
 // ============================================

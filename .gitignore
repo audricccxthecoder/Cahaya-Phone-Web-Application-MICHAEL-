@@ -4,6 +4,10 @@
 # Image folder
 image/
 
+# WhatsApp session (jangan commit — berisi auth data)
+wa-session/
+backend/wa-session/
+
 # Dependencies
 node_modules/
 
