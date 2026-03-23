@@ -32,19 +32,19 @@ app.use(cors({
 }));
 
 // ============================================
-// SERVE STATIC FRONTEND (opsional — untuk Railway atau local dev)
-// Di production: frontend di Vercel, backend di Railway
-// Di dev/Railway: backend juga serve frontend files
+// SERVE STATIC FRONTEND
+// Selalu serve frontend files (Vercel, Railway, maupun local dev)
+// Nanti kalau frontend pindah ke Vercel terpisah, backend Railway
+// tidak perlu serve static lagi — tapi untuk sekarang tetap serve
 // ============================================
-if (!process.env.VERCEL) {
-    app.use('/customer', express.static(path.join(__dirname, '../customer')));
-    app.use('/admin', express.static(path.join(__dirname, '../admin')));
-    app.use('/nota', express.static(path.join(__dirname, '../nota')));
+app.use('/config.js', express.static(path.join(__dirname, '../config.js')));
+app.use('/customer', express.static(path.join(__dirname, '../customer')));
+app.use('/admin', express.static(path.join(__dirname, '../admin')));
+app.use('/nota', express.static(path.join(__dirname, '../nota')));
 
-    app.get('/', (req, res) => {
-        res.redirect('/customer');
-    });
-}
+app.get('/', (req, res) => {
+    res.redirect('/customer');
+});
 
 // Health check
 app.get('/api/health', async (req, res) => {
