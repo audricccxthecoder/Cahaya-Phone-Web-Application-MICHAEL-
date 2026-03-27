@@ -344,9 +344,17 @@ exports.getCustomerById = async (req, res) => {
             [id]
         );
 
+        // Include chat history (last 50 messages)
+        const { rows: messages } = await db.query(
+            `SELECT id, direction, message, channel, sent_at, created_at
+             FROM messages WHERE customer_id = $1
+             ORDER BY COALESCE(sent_at, created_at) DESC LIMIT 50`,
+            [id]
+        );
+
         res.json({
             success: true,
-            data: { ...customers[0], purchases, purchase_count: purchases.length }
+            data: { ...customers[0], purchases, purchase_count: purchases.length, messages }
         });
 
     } catch (error) {

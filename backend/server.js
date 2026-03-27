@@ -40,7 +40,6 @@ app.use(cors({
 app.use('/config.js', express.static(path.join(__dirname, '../config.js')));
 app.use('/customer', express.static(path.join(__dirname, '../customer')));
 app.use('/admin', express.static(path.join(__dirname, '../admin')));
-app.use('/nota', express.static(path.join(__dirname, '../nota')));
 
 app.get('/', (req, res) => {
     res.redirect('/customer');
@@ -88,6 +87,7 @@ if (process.env.VERCEL) {
     module.exports = app;
 } else {
     // Railway / local dev = persistent server + WA Client
+    const cron = require('node-cron');
     const PORT = process.env.PORT || 5000;
 
     app.listen(PORT, async () => {
@@ -125,5 +125,13 @@ if (process.env.VERCEL) {
             console.error('[WA] Failed to initialize:', err.message);
             console.log('[WA] Server will continue without WhatsApp. Use Fonnte fallback.');
         }
+
+        // Birthday greeting cron — setiap hari jam 8 pagi WIB (01:00 UTC)
+        const birthdayController = require('./controllers/birthdayController');
+        cron.schedule('0 8 * * *', () => {
+            console.log('[Cron] Running birthday check...');
+            birthdayController.cronCheckBirthdays();
+        }, { timezone: 'Asia/Makassar' });
+        console.log('[Cron] Birthday greeting scheduled: every day at 08:00 WITA');
     });
 }

@@ -186,6 +186,35 @@ async function migrate() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_br_status ON broadcast_recipients (job_id, status)`);
     console.log('✅ Table broadcast_recipients created/verified');
 
+    // Birthday greetings log
+    console.log('Creating table: birthday_greetings...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS birthday_greetings (
+        id SERIAL PRIMARY KEY,
+        customer_id INT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+        greeting_year INT NOT NULL,
+        message TEXT,
+        status VARCHAR(20) DEFAULT 'pending',
+        error TEXT,
+        sent_at TIMESTAMP,
+        UNIQUE(customer_id, greeting_year)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_bg_customer ON birthday_greetings (customer_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_bg_year ON birthday_greetings (greeting_year)`);
+    console.log('✅ Table birthday_greetings created/verified');
+
+    // App settings (key-value store for birthday message, etc.)
+    console.log('Creating table: app_settings...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Table app_settings created/verified');
+
     // Buat view statistik
     console.log('Creating view: customer_stats...');
     await client.query(`DROP VIEW IF EXISTS customer_stats`);

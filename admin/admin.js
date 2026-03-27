@@ -633,8 +633,8 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 loadCustomers();
             } else if (targetPage === 'analytics') {
                 loadAnalytics();
-            } else if (targetPage === 'invoices') {
-                loadInvoices();
+            } else if (targetPage === 'birthday') {
+                loadBirthdayPage();
             } else if (targetPage === 'waconnect') {
                 loadWAStatus();
                 loadWAAutoReply();
@@ -894,7 +894,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             // Refresh halaman yang sedang aktif
             if (page === 'customers') await loadCustomers();
             else if (page === 'analytics') loadAnalytics();
-            else if (page === 'invoices') loadInvoices();
+            else if (page === 'birthday') loadBirthdayPage();
             else if (page === 'waconnect') { loadWAStatus(); loadWAAutoReply(); loadFailedWA(); }
             else if (page === 'broadcast') { loadDailySentCount(); const s = await apiCall('/admin/broadcast/status'); if (s && s.status) renderBroadcastStatus(s.status); }
             else if (page === 'messages') { await loadMessages(); loadCleanupStatus(); }
@@ -1106,6 +1106,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
         const purchases = customer.purchases || [];
         const purchaseCount = customer.purchase_count || 0;
+        const messages = customer.messages || [];
 
         // Purchase history section
         let purchaseHtml = '';
@@ -1122,7 +1123,6 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                             <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Produk</th>
                             <th style="text-align:right;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Harga</th>
                             <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Sales</th>
-                            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Nota</th>
                         </tr></thead>
                         <tbody>
                             ${purchases.map(p => `
@@ -1131,11 +1131,56 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-weight:500;">${(p.merk_unit || '') + (p.tipe_unit ? ' ' + p.tipe_unit : '') || '-'}</td>
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;text-align:right;">${p.harga ? formatRpDetail(p.harga) : '-'}</td>
                                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${p.nama_sales || '-'}</td>
-                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;"><button class="btn-small" onclick="createInvoiceFromPurchase(${p.id})" style="font-size:11px;padding:4px 10px;">Buat Nota</button></td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
+                </div>
+            `;
+        }
+
+        // Chat history section
+        let chatHtml = '';
+        if (messages.length > 0) {
+            const chatRows = messages.reverse().map(m => {
+                const time = formatWaktu(m.sent_at || m.created_at);
+                const isIncoming = m.direction === 'incoming';
+                const dirBadge = isIncoming
+                    ? '<span style="background:#DBEAFE;color:#2563EB;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">Masuk</span>'
+                    : '<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">Keluar</span>';
+                const msgText = (m.message || '').length > 80 ? m.message.substring(0, 80) + '...' : (m.message || '-');
+                return `<tr>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:12px;color:#8C8078;white-space:nowrap;">${time}</td>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;text-align:center;">${dirBadge}</td>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:12px;word-break:break-word;">${msgText}</td>
+                </tr>`;
+            }).join('');
+
+            chatHtml = `
+                <div style="margin-top:20px;padding-top:20px;border-top:2px solid #EDE8E3;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                        <h4 style="margin:0;font-size:15px;color:#1A1412;">Riwayat Chat WA</h4>
+                        <span style="background:#25D366;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;">${messages.length} pesan</span>
+                    </div>
+                    <div style="max-height:250px;overflow-y:auto;border:1px solid #EDE8E3;border-radius:8px;">
+                        <table style="width:100%;font-size:13px;border-collapse:collapse;">
+                            <thead><tr style="position:sticky;top:0;background:#FAFAF8;">
+                                <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;font-size:11px;">WAKTU</th>
+                                <th style="text-align:center;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;font-size:11px;">ARAH</th>
+                                <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;font-size:11px;">PESAN</th>
+                            </tr></thead>
+                            <tbody>${chatRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        } else {
+            chatHtml = `
+                <div style="margin-top:20px;padding-top:20px;border-top:2px solid #EDE8E3;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                        <h4 style="margin:0;font-size:15px;color:#1A1412;">Riwayat Chat WA</h4>
+                    </div>
+                    <div style="text-align:center;padding:20px;color:#8C8078;font-size:13px;">Belum ada riwayat chat</div>
                 </div>
             `;
         }
@@ -1196,6 +1241,10 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                     </div>
                 </div>
                 <div class="detail-group">
+                    <div class="detail-label">Tipe</div>
+                    <div class="detail-value"><span style="background:${customer.tipe === 'Chat Only' ? 'rgba(37,99,235,0.1);color:#2563EB' : 'rgba(185,28,28,0.08);color:#B91C1C'};padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;">${customer.tipe || 'Belanja'}</span></div>
+                </div>
+                <div class="detail-group">
                     <div class="detail-label">Total Pembelian</div>
                     <div class="detail-value" style="font-weight:600;color:#B91C1C;">${purchaseCount}x transaksi</div>
                 </div>
@@ -1204,7 +1253,19 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                     <div class="detail-value">${date}</div>
                 </div>
             </div>
+            <!-- Status Legend -->
+            <div style="margin-top:16px;padding:12px 16px;background:#FAFAF8;border:1px solid #EDE8E3;border-radius:8px;">
+                <div style="font-size:11px;font-weight:600;color:#8C8078;margin-bottom:6px;">KETERANGAN STATUS:</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11px;color:#5C534B;">
+                    <span><strong style="color:#D97706;">New</strong> = Baru masuk</span>
+                    <span><strong style="color:#2563EB;">Contacted</strong> = Sudah dihubungi</span>
+                    <span><strong style="color:#9333EA;">Follow Up</strong> = Perlu ditindaklanjuti</span>
+                    <span><strong style="color:#16A34A;">Completed</strong> = Deal/selesai</span>
+                    <span><strong style="color:#8C8078;">Inactive</strong> = Tidak aktif</span>
+                </div>
+            </div>
             ${purchaseHtml}
+            ${chatHtml}
         `;
 
         modal.classList.add('show');
@@ -2013,250 +2074,173 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
 
     // ============================================
-    // INVOICES (NOTA DIGITAL)
+    // BIRTHDAY GREETING PAGE
     // ============================================
 
-    let allInvoices = [];
+    async function loadBirthdayPage() {
+        loadBirthdayToday();
+        loadBirthdayHistory();
+    }
 
-    async function loadInvoices() {
-        const container = document.getElementById('invoicesTable');
+    window.refreshBirthday = loadBirthdayPage;
+
+    async function loadBirthdayToday() {
+        const container = document.getElementById('birthdayTodayList');
         container.innerHTML = '<div class="loading">Loading...</div>';
         try {
-            const result = await apiCall('/admin/invoices');
-            if (result && result.success) {
-                allInvoices = result.data;
-                displayInvoices(result.data);
-            } else {
-                container.innerHTML = '<div class="no-data">Belum ada nota</div>';
+            const result = await apiCall('/admin/birthday/today');
+            if (!result || !result.success) {
+                container.innerHTML = '<div class="no-data">Gagal memuat data</div>';
+                return;
             }
-        } catch (e) {
-            container.innerHTML = '<div class="no-data">Gagal memuat nota</div>';
-        }
-    }
 
-    window.refreshInvoices = loadInvoices;
+            const { customers, message, autoSend } = result.data;
+            document.getElementById('birthdayAutoSend').checked = autoSend;
+            document.getElementById('birthdayMessageTemplate').value = message;
 
-    function displayInvoices(invoices) {
-        const container = document.getElementById('invoicesTable');
-        if (invoices.length === 0) {
-            container.innerHTML = '<div class="no-data">Belum ada nota</div>';
-            return;
-        }
+            if (customers.length === 0) {
+                container.innerHTML = '<div class="no-data" style="text-align:center;padding:30px;color:#8C8078;">Tidak ada customer yang ulang tahun hari ini</div>';
+                document.getElementById('sendAllBirthdayBtn').style.display = 'none';
+                return;
+            }
 
-        const formatRpInv = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+            const pending = customers.filter(c => !c.greeting_id || c.greeting_status === 'failed');
+            document.getElementById('sendAllBirthdayBtn').style.display = pending.length > 0 ? '' : 'none';
 
-        let html = `<table><thead><tr>
-            <th>No. Nota</th>
-            <th>Customer</th>
-            <th>Total</th>
-            <th>Metode</th>
-            <th>Tanggal</th>
-            <th>Aksi</th>
-        </tr></thead><tbody>`;
+            let html = `<table style="width:100%;border-collapse:collapse;"><thead><tr>
+                <th style="text-align:left;padding:10px 8px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:12px;">NAMA</th>
+                <th style="text-align:left;padding:10px 8px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:12px;">WHATSAPP</th>
+                <th style="text-align:left;padding:10px 8px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:12px;">TGL LAHIR</th>
+                <th style="text-align:center;padding:10px 8px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:12px;">STATUS</th>
+                <th style="text-align:center;padding:10px 8px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:12px;">AKSI</th>
+            </tr></thead><tbody>`;
 
-        invoices.forEach(inv => {
-            const date = formatTanggal(inv.created_at);
-            const notaUrl = `${window.location.origin}/nota/?t=${inv.token}`;
-            const waText = encodeURIComponent(`Halo ${inv.nama_lengkap}, terima kasih sudah belanja di *Cahaya Phone*! Berikut nota pembelian Anda:\n\n${notaUrl}\n\nSimpan sebagai bukti pembelian. Terima kasih!`);
-            const waLink = `https://wa.me/${inv.whatsapp}?text=${waText}`;
+            customers.forEach(c => {
+                const tgl = c.tanggal_lahir ? new Date(c.tanggal_lahir).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+                let statusBadge = '';
+                let actionBtn = '';
 
-            html += `<tr>
-                <td style="font-weight:600;font-size:13px;">${inv.invoice_number}</td>
-                <td>${inv.nama_lengkap}</td>
-                <td style="font-weight:600;">${formatRpInv(inv.total)}</td>
-                <td>${inv.metode_pembayaran || '-'}</td>
-                <td>${date}</td>
-                <td>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                        <button class="btn-small" onclick="previewInvoice(${inv.id})" style="font-size:11px;padding:6px 10px;">Lihat</button>
-                        <a href="${waLink}" target="_blank" rel="noopener" class="btn-small" style="font-size:11px;padding:6px 10px;background:#25D366;color:#fff;border-color:#25D366;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">Kirim WA</a>
-                        <button class="btn-small" onclick="copyNotaLink('${inv.token}')" style="font-size:11px;padding:6px 10px;">Copy Link</button>
-                        <button class="btn-small" onclick="deleteInvoice(${inv.id})" style="font-size:11px;padding:6px 10px;color:#DC2626;border-color:rgba(220,38,38,0.2);">Hapus</button>
-                    </div>
-                </td>
-            </tr>`;
-        });
+                if (c.greeting_status === 'sent') {
+                    statusBadge = '<span style="background:#DCFCE7;color:#16A34A;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Terkirim</span>';
+                    const sentTime = c.sent_at ? new Date(c.sent_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+                    if (sentTime) statusBadge += `<br><span style="font-size:10px;color:#8C8078;">${sentTime}</span>`;
+                } else if (c.greeting_status === 'failed') {
+                    statusBadge = '<span style="background:#FEE2E2;color:#DC2626;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Gagal</span>';
+                    actionBtn = `<button class="btn-small" onclick="sendBirthdayGreeting(${c.id})" style="font-size:11px;padding:4px 12px;">Kirim Ulang</button>`;
+                } else {
+                    statusBadge = '<span style="background:#FEF3C7;color:#D97706;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Belum</span>';
+                    actionBtn = `<button class="btn-small" onclick="sendBirthdayGreeting(${c.id})" style="font-size:11px;padding:4px 12px;">Kirim</button>`;
+                }
 
-        html += '</tbody></table>';
-        container.innerHTML = html;
-    }
-
-    window.previewInvoice = async function(id) {
-        const result = await apiCall(`/admin/invoices/${id}`);
-        if (!result || !result.success) return alert('Gagal memuat nota');
-
-        const inv = result.data;
-        const items = typeof inv.items === 'string' ? JSON.parse(inv.items) : inv.items;
-        const formatRpInv = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
-        const notaUrl = `${window.location.origin}/nota/?t=${inv.token}`;
-
-        let itemsHtml = items.map(item =>
-            `<tr><td style="padding:8px 0;border-bottom:1px solid #F5F3F0;">${item.nama}</td>
-             <td style="padding:8px 0;border-bottom:1px solid #F5F3F0;text-align:center;">${item.qty || 1}</td>
-             <td style="padding:8px 0;border-bottom:1px solid #F5F3F0;text-align:right;">${formatRpInv((item.harga || 0) * (item.qty || 1))}</td></tr>`
-        ).join('');
-
-        let diskonHtml = Number(inv.diskon) > 0 ? `<div style="display:flex;justify-content:space-between;color:#16A34A;font-size:14px;"><span>Diskon</span><span>- ${formatRpInv(inv.diskon)}</span></div>` : '';
-
-        const body = document.getElementById('invoicePreviewBody');
-        body.innerHTML = `
-            <div style="text-align:center;margin-bottom:16px;">
-                <h2 style="font-family:'Playfair Display',serif;color:#B91C1C;margin:0;">Cahaya Phone</h2>
-                <p style="font-size:12px;color:#8C8078;">Gorontalo</p>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:13px;">
-                <div><span style="color:#8C8078;">No. Nota:</span><br><strong>${inv.invoice_number}</strong></div>
-                <div><span style="color:#8C8078;">Tanggal:</span><br><strong>${formatTanggal(inv.created_at)}</strong></div>
-                <div><span style="color:#8C8078;">Customer:</span><br><strong>${inv.nama_lengkap}</strong></div>
-                <div><span style="color:#8C8078;">WhatsApp:</span><br><strong>${inv.whatsapp}</strong></div>
-            </div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">
-                <thead><tr>
-                    <th style="text-align:left;padding:8px 0;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">PRODUK</th>
-                    <th style="text-align:center;padding:8px 0;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">QTY</th>
-                    <th style="text-align:right;padding:8px 0;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">HARGA</th>
-                </tr></thead>
-                <tbody>${itemsHtml}</tbody>
-            </table>
-            <div style="display:flex;justify-content:space-between;font-size:14px;color:#5C534B;"><span>Subtotal</span><span>${formatRpInv(inv.subtotal)}</span></div>
-            ${diskonHtml}
-            <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:#B91C1C;border-top:2px solid #1A1412;margin-top:8px;padding-top:12px;"><span>Total</span><span>${formatRpInv(inv.total)}</span></div>
-            ${inv.metode_pembayaran ? `<div style="margin-top:12px;font-size:13px;color:#8C8078;">Metode: <span style="background:rgba(185,28,28,0.08);color:#B91C1C;padding:2px 10px;border-radius:6px;font-weight:600;">${inv.metode_pembayaran}</span></div>` : ''}
-            ${inv.catatan ? `<div style="margin-top:8px;font-size:13px;color:#5C534B;font-style:italic;">${inv.catatan}</div>` : ''}
-            <div style="margin-top:16px;display:flex;gap:8px;">
-                <a href="https://wa.me/${inv.whatsapp}?text=${encodeURIComponent(`Halo ${inv.nama_lengkap}, terima kasih sudah belanja di *Cahaya Phone*! Berikut nota pembelian Anda:\n\n${notaUrl}\n\nSimpan sebagai bukti pembelian. Terima kasih!`)}" target="_blank" rel="noopener" class="btn-primary" style="width:auto;padding:10px 20px;background:#25D366;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px;">Kirim via WA</a>
-                <button onclick="copyNotaLink('${inv.token}')" class="btn-small" style="padding:10px 16px;">Copy Link</button>
-                <a href="${notaUrl}" target="_blank" rel="noopener" class="btn-small" style="padding:10px 16px;text-decoration:none;">Buka Nota</a>
-            </div>
-        `;
-
-        document.getElementById('invoicePreviewModal').classList.add('show');
-    };
-
-    window.closeInvoicePreview = function() {
-        document.getElementById('invoicePreviewModal').classList.remove('show');
-    };
-
-    window.copyNotaLink = function(token) {
-        const url = `${window.location.origin}/nota/?t=${token}`;
-        navigator.clipboard.writeText(url).then(() => {
-            alert('Link nota berhasil dicopy!');
-        }).catch(() => {
-            prompt('Copy link ini:', url);
-        });
-    };
-
-    window.deleteInvoice = async function(id) {
-        if (!confirm('Hapus nota ini?')) return;
-        const result = await apiCall(`/admin/invoices/${id}`, { method: 'DELETE' });
-        if (result && result.success) {
-            loadInvoices();
-        } else {
-            alert('Gagal menghapus nota');
-        }
-    };
-
-    // Create Invoice Modal
-    window.showCreateInvoice = async function() {
-        // Populate customer dropdown
-        const select = document.getElementById('invoiceCustomer');
-        if (allCustomers.length === 0) {
-            const result = await apiCall('/admin/customers');
-            if (result && result.success) allCustomers = result.data;
-        }
-        select.innerHTML = '<option value="">-- Pilih Customer --</option>';
-        allCustomers.filter(c => (c.tipe || 'Belanja') === 'Belanja').forEach(c => {
-            select.innerHTML += `<option value="${c.id}" data-wa="${c.whatsapp}">${c.nama_lengkap} - ${c.whatsapp}</option>`;
-        });
-
-        // Reset form
-        document.getElementById('invoiceItems').innerHTML = `
-            <div class="invoice-item-row" style="display:grid;grid-template-columns:2fr 60px 1fr 30px;gap:8px;margin-bottom:8px;align-items:center;">
-                <input type="text" placeholder="Nama produk" class="inv-nama" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
-                <input type="number" placeholder="Qty" value="1" min="1" class="inv-qty" style="padding:10px 8px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;text-align:center;">
-                <input type="number" placeholder="Harga" class="inv-harga" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
-                <span></span>
-            </div>`;
-        document.getElementById('invoiceDiskon').value = '0';
-        document.getElementById('invoiceCatatan').value = '';
-
-        document.getElementById('createInvoiceModal').classList.add('show');
-    };
-
-    window.closeInvoiceModal = function() {
-        document.getElementById('createInvoiceModal').classList.remove('show');
-    };
-
-    window.addInvoiceItemRow = function() {
-        const container = document.getElementById('invoiceItems');
-        const row = document.createElement('div');
-        row.className = 'invoice-item-row';
-        row.style.cssText = 'display:grid;grid-template-columns:2fr 60px 1fr 30px;gap:8px;margin-bottom:8px;align-items:center;';
-        row.innerHTML = `
-            <input type="text" placeholder="Nama produk" class="inv-nama" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
-            <input type="number" placeholder="Qty" value="1" min="1" class="inv-qty" style="padding:10px 8px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;text-align:center;">
-            <input type="number" placeholder="Harga" class="inv-harga" style="padding:10px 12px;border:1px solid #EDE8E3;border-radius:8px;font-size:13px;">
-            <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:18px;padding:0;">&times;</button>
-        `;
-        container.appendChild(row);
-    };
-
-    window.submitInvoice = async function() {
-        const customerId = document.getElementById('invoiceCustomer').value;
-        if (!customerId) return alert('Pilih customer dulu');
-
-        const rows = document.querySelectorAll('.invoice-item-row');
-        const items = [];
-        rows.forEach(row => {
-            const nama = row.querySelector('.inv-nama').value.trim();
-            const qty = parseInt(row.querySelector('.inv-qty').value) || 1;
-            const harga = parseFloat(row.querySelector('.inv-harga').value) || 0;
-            if (nama && harga > 0) items.push({ nama, qty, harga });
-        });
-
-        if (items.length === 0) return alert('Tambahkan minimal 1 item produk');
-
-        const diskon = parseFloat(document.getElementById('invoiceDiskon').value) || 0;
-        const metode_pembayaran = document.getElementById('invoiceMetode').value;
-        const catatan = document.getElementById('invoiceCatatan').value.trim();
-
-        const result = await apiCall('/admin/invoices', {
-            method: 'POST',
-            body: JSON.stringify({ customer_id: customerId, items, diskon, metode_pembayaran, catatan })
-        });
-
-        if (result && result.success) {
-            closeInvoiceModal();
-            loadInvoices();
-            // Show preview immediately
-            previewInvoice(result.data.id);
-        } else {
-            alert('Gagal membuat nota: ' + (result?.message || 'Error'));
-        }
-    };
-
-    // Create invoice from customer detail (purchase)
-    window.createInvoiceFromPurchase = async function(purchaseId) {
-        const result = await apiCall('/admin/invoices/from-purchase', {
-            method: 'POST',
-            body: JSON.stringify({ purchase_id: purchaseId })
-        });
-
-        if (result && result.success) {
-            closeModal();
-            // Navigate to invoices tab
-            document.querySelectorAll('.nav-item').forEach(nav => {
-                nav.classList.remove('active');
-                if (nav.dataset.page === 'invoices') nav.classList.add('active');
+                html += `<tr>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;font-weight:500;">${c.nama_lengkap}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;font-size:13px;">${c.whatsapp}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;font-size:13px;">${tgl}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;">${statusBadge}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;">${actionBtn}</td>
+                </tr>`;
             });
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById('invoicesPage').classList.add('active');
-            loadInvoices();
-            setTimeout(() => previewInvoice(result.data.id), 500);
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        } catch (err) {
+            container.innerHTML = '<div class="no-data">Error: ' + err.message + '</div>';
+        }
+    }
+
+    window.sendBirthdayGreeting = async function(customerId) {
+        const result = await apiCall('/admin/birthday/send', {
+            method: 'POST',
+            body: JSON.stringify({ customer_id: customerId })
+        });
+        if (result && result.success) {
+            alert('Ucapan berhasil dikirim!');
         } else {
-            alert('Gagal membuat nota: ' + (result?.message || 'Error'));
+            alert('Gagal mengirim: ' + (result?.message || result?.error || 'Error'));
+        }
+        loadBirthdayToday();
+        loadBirthdayHistory();
+    };
+
+    window.sendAllBirthdayGreetings = async function() {
+        if (!confirm('Kirim ucapan ulang tahun ke semua customer yang belum terkirim?')) return;
+        const btn = document.getElementById('sendAllBirthdayBtn');
+        btn.disabled = true;
+        btn.textContent = 'Mengirim...';
+
+        const result = await apiCall('/admin/birthday/send-all', { method: 'POST' });
+        if (result && result.success) {
+            alert(`Selesai! Terkirim: ${result.sent}, Gagal: ${result.failed}`);
+        } else {
+            alert('Error: ' + (result?.message || 'Gagal'));
+        }
+
+        btn.disabled = false;
+        btn.textContent = 'Kirim Semua';
+        loadBirthdayToday();
+        loadBirthdayHistory();
+    };
+
+    window.saveBirthdayMessage = async function() {
+        const message = document.getElementById('birthdayMessageTemplate').value;
+        const result = await apiCall('/admin/birthday/message', {
+            method: 'PUT',
+            body: JSON.stringify({ message })
+        });
+        if (result && result.success) {
+            alert('Template pesan berhasil disimpan!');
+        } else {
+            alert('Gagal menyimpan: ' + (result?.message || 'Error'));
         }
     };
+
+    window.toggleBirthdayAutoSend = async function(enabled) {
+        await apiCall('/admin/birthday/auto-send', {
+            method: 'POST',
+            body: JSON.stringify({ enabled })
+        });
+    };
+
+    async function loadBirthdayHistory() {
+        const container = document.getElementById('birthdayHistory');
+        container.innerHTML = '<div class="loading">Loading...</div>';
+        try {
+            const result = await apiCall('/admin/birthday/history');
+            if (!result || !result.success || result.data.length === 0) {
+                container.innerHTML = '<div class="no-data">Belum ada riwayat ucapan</div>';
+                return;
+            }
+
+            let html = `<table style="width:100%;border-collapse:collapse;"><thead><tr>
+                <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">NAMA</th>
+                <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">TGL LAHIR</th>
+                <th style="text-align:center;padding:8px 6px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">TAHUN</th>
+                <th style="text-align:center;padding:8px 6px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">STATUS</th>
+                <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #EDE8E3;color:#8C8078;font-size:11px;">DIKIRIM</th>
+            </tr></thead><tbody>`;
+
+            result.data.forEach(h => {
+                const tgl = h.tanggal_lahir ? new Date(h.tanggal_lahir).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-';
+                const sentAt = h.sent_at ? new Date(h.sent_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+                const badge = h.status === 'sent'
+                    ? '<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:6px;font-size:11px;">Terkirim</span>'
+                    : '<span style="background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:6px;font-size:11px;">Gagal</span>';
+
+                html += `<tr>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:13px;">${h.nama_lengkap}</td>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:13px;">${tgl}</td>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:13px;text-align:center;">${h.greeting_year}</td>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;text-align:center;">${badge}</td>
+                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:12px;color:#8C8078;">${sentAt}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        } catch (err) {
+            container.innerHTML = '<div class="no-data">Error</div>';
+        }
+    }
 
     // ============================================
     // ANALYTICS PAGE
