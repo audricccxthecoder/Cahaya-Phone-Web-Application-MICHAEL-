@@ -6,10 +6,17 @@
 // - Chat manual (Skenario B): HANYA save DB + Google Contact
 //   Format: "Customer - DD/MM/YYYY". TIDAK kirim auto-reply.
 // - Auto-reply HANYA dari formController (Skenario A).
+//
+// ATURAN CUSTOMER:
+// - 1 nomor HP = 1 record customer (tidak boleh duplikat)
+// - Chat masuk dari nomor yang sudah ada → update, BUKAN insert baru
+// - Chat Only → saat submit form → pindah ke Belanja
+// - Sudah pernah Belanja → chat lagi → TIDAK bikin record baru
 // ============================================
 
 const db = require('../config/database');
 const googleService = require('../config/google');
+const { sanitizePhone } = require('../utils/phoneUtils');
 
 /**
  * Handle incoming message dari WA Client (event internal, bukan HTTP)
@@ -18,12 +25,20 @@ const googleService = require('../config/google');
 exports.handleIncomingMessage = async (data) => {
     try {
         const { sender: phoneNumber, message, pushname: senderName } = data;
-        const cleanPhone = phoneNumber.replace(/\D/g, '');
+
+        // PENTING: pakai sanitizePhone supaya format konsisten (628xxx)
+        const cleanPhone = sanitizePhone(phoneNumber.replace(/\D/g, ''));
+
+        if (!cleanPhone || !cleanPhone.startsWith('62')) {
+            console.log(`[WEBHOOK] Invalid phone number: ${phoneNumber}, skipped`);
+            return { success: false, error: 'Invalid phone number' };
+        }
 
         console.log(`[WEBHOOK] Processing: ${senderName} (${cleanPhone}): ${message.substring(0, 50)}...`);
 
+        // Cari customer berdasarkan nomor HP (1 nomor = 1 customer)
         const { rows: existing } = await db.query(
-            'SELECT id, nama_lengkap, status, tipe FROM customers WHERE whatsapp = $1',
+            'SELECT id, nama_lengkap, status, tipe FROM customers WHERE whatsapp = $1 ORDER BY created_at DESC LIMIT 1',
             [cleanPhone]
         );
 
@@ -31,11 +46,14 @@ exports.handleIncomingMessage = async (data) => {
         let customerStatus;
 
         if (existing.length > 0) {
-            // Customer sudah ada
+            // ============================================
+            // Customer SUDAH ADA (Chat Only atau Belanja)
+            // Cukup update status + simpan pesan. TIDAK bikin record baru.
+            // ============================================
             customerId = existing[0].id;
             const currentStatus = existing[0].status;
 
-            // Auto status transitions
+            // Auto status transitions (hanya untuk status tertentu)
             if (['New', 'Inactive', 'Follow Up'].includes(currentStatus)) {
                 await db.query('UPDATE customers SET status = $1 WHERE id = $2', ['Contacted', customerId]);
                 customerStatus = 'Contacted';
@@ -43,20 +61,24 @@ exports.handleIncomingMessage = async (data) => {
                 customerStatus = currentStatus;
             }
 
-            console.log(`[WEBHOOK] Existing customer: ${customerId} (${currentStatus} -> ${customerStatus})`);
+            console.log(`[WEBHOOK] Existing customer: ${customerId} (${existing[0].tipe}) — ${currentStatus} -> ${customerStatus}`);
 
-            // Update nama dari pushname jika berubah
-            if (senderName && senderName !== existing[0].nama_lengkap) {
-                try {
-                    await googleService.saveContact({
-                        nama_lengkap: senderName,
-                        whatsapp: cleanPhone,
-                        tipe: existing[0].tipe || 'Chat Only'
-                    });
-                    await db.query('UPDATE customers SET nama_lengkap = $1 WHERE id = $2', [senderName, customerId]);
-                    console.log(`[WEBHOOK] Google Contact updated: ${existing[0].nama_lengkap} -> ${senderName}`);
-                } catch (gcErr) {
-                    console.warn('[WEBHOOK] Google Contact update failed:', gcErr.message);
+            // Update nama dari pushname jika berubah (dan pushname ada isinya)
+            if (senderName && senderName !== existing[0].nama_lengkap && !existing[0].nama_lengkap.startsWith('Customer -')) {
+                // Hanya update nama jika nama sebelumnya bukan nama asli dari form
+                // Jika tipe = Belanja, nama dari form lebih akurat — jangan timpa
+                if (existing[0].tipe === 'Chat Only') {
+                    try {
+                        await googleService.saveContact({
+                            nama_lengkap: senderName,
+                            whatsapp: cleanPhone,
+                            tipe: 'Chat Only'
+                        });
+                        await db.query('UPDATE customers SET nama_lengkap = $1 WHERE id = $2', [senderName, customerId]);
+                        console.log(`[WEBHOOK] Nama updated: ${existing[0].nama_lengkap} -> ${senderName}`);
+                    } catch (gcErr) {
+                        console.warn('[WEBHOOK] Google Contact update failed:', gcErr.message);
+                    }
                 }
             }
         } else {
@@ -76,7 +98,14 @@ exports.handleIncomingMessage = async (data) => {
                 source = 'TikTok';
             }
 
-            const customerName = senderName || 'Customer Baru';
+            // Format nama: "Customer - DD/MM/YYYY" (bukan "Customer Baru")
+            const now = new Date();
+            const tanggal = now.toLocaleDateString('id-ID', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                timeZone: 'Asia/Makassar'
+            });
+            const customerName = senderName || `Customer - ${tanggal}`;
+
             const { rows: inserted } = await db.query(
                 `INSERT INTO customers (nama_lengkap, whatsapp, source, status, tipe)
                 VALUES ($1, $2, $3, 'New', 'Chat Only') RETURNING id`,
@@ -86,7 +115,7 @@ exports.handleIncomingMessage = async (data) => {
             customerId = inserted[0].id;
             customerStatus = 'New';
 
-            console.log(`[WEBHOOK] New customer (Chat Only): ${customerId} — NO auto-reply`);
+            console.log(`[WEBHOOK] New customer (Chat Only): ${customerId} — ${customerName} — NO auto-reply`);
 
             // Auto-save ke Google Contacts (format: "Customer - DD/MM/YYYY")
             try {

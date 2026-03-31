@@ -14,7 +14,7 @@ const DEFAULT_MESSAGE = `Halo Kak {nama}! 🎂🎉\n\nSelamat Ulang Tahun dari k
 async function getBirthdayToday() {
     const result = await db.query(`
         SELECT c.id, c.nama_lengkap, c.whatsapp, c.tanggal_lahir, c.merk_unit, c.tipe_unit,
-               bg.id as greeting_id, bg.status as greeting_status, bg.sent_at
+               bg.id as greeting_id, bg.status as greeting_status, bg.sent_at, bg.error as greeting_error
         FROM customers c
         LEFT JOIN birthday_greetings bg
             ON bg.customer_id = c.id AND bg.greeting_year = EXTRACT(YEAR FROM CURRENT_DATE)
@@ -165,6 +165,13 @@ exports.getHistory = async (req, res) => {
 };
 
 /**
+ * Helper: Generate waktu sekarang dalam zona WITA (Asia/Makassar) sebagai ISO string
+ */
+function nowWITA() {
+    return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Makassar' }).replace(' ', 'T');
+}
+
+/**
  * Internal: Kirim pesan birthday ke 1 customer
  */
 async function sendBirthdayMessage(customerId) {
@@ -198,25 +205,44 @@ async function sendBirthdayMessage(customerId) {
         // Replace placeholder
         message = message.replace(/\{nama\}/g, customer.nama_lengkap);
 
+        // Cek dulu apakah nomor terdaftar di WhatsApp
+        const numberCheck = await whatsappService.isNumberRegistered(customer.whatsapp);
+        if (!numberCheck.registered) {
+            const errorMsg = numberCheck.error || `Nomor ${customer.whatsapp} tidak terdaftar di WhatsApp`;
+
+            await db.query(`
+                INSERT INTO birthday_greetings (customer_id, greeting_year, message, status, error)
+                VALUES ($1, $2, $3, 'failed', $4)
+                ON CONFLICT (customer_id, greeting_year) DO UPDATE
+                SET status = 'failed', error = $4
+            `, [customerId, year, message, errorMsg]);
+
+            console.log(`[Birthday] ❌ ${customer.nama_lengkap}: ${errorMsg}`);
+            return { success: false, message: errorMsg, error: errorMsg };
+        }
+
         // Kirim via WhatsApp
         const waResult = await whatsappService.sendMessage(customer.whatsapp, message);
+
+        // Waktu sekarang dalam WITA (bukan NOW() dari DB yang pakai UTC)
+        const sentAtWITA = nowWITA();
 
         // Log ke database
         if (waResult.success) {
             await db.query(`
                 INSERT INTO birthday_greetings (customer_id, greeting_year, message, status, sent_at)
-                VALUES ($1, $2, $3, 'sent', NOW())
+                VALUES ($1, $2, $3, 'sent', $4)
                 ON CONFLICT (customer_id, greeting_year) DO UPDATE
-                SET status = 'sent', message = $3, sent_at = NOW()
-            `, [customerId, year, message]);
+                SET status = 'sent', message = $3, sent_at = $4
+            `, [customerId, year, message, sentAtWITA]);
 
             // Log ke messages table juga
             await db.query(`
-                INSERT INTO messages (customer_id, direction, message, channel, created_at)
-                VALUES ($1, 'outgoing', $2, 'whatsapp', NOW())
-            `, [customerId, message]);
+                INSERT INTO messages (customer_id, direction, message, sent_at)
+                VALUES ($1, 'out', $2, $3)
+            `, [customerId, message, sentAtWITA]);
 
-            console.log(`[Birthday] ✅ Sent to ${customer.nama_lengkap} (${customer.whatsapp})`);
+            console.log(`[Birthday] ✅ Sent to ${customer.nama_lengkap} (${customer.whatsapp}) at ${sentAtWITA} WITA`);
         } else {
             await db.query(`
                 INSERT INTO birthday_greetings (customer_id, greeting_year, message, status, error)

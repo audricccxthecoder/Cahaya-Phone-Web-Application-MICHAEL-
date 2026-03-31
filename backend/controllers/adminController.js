@@ -1437,9 +1437,10 @@ exports.retryWA = async (req, res) => {
         const customer = rows[0];
         const waResult = await whatsappService.sendAutoReply({ nama_lengkap: customer.nama_lengkap, whatsapp: customer.whatsapp });
         const waSent = waResult && waResult.success;
-        await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customer.id]);
+        await db.query('UPDATE customers SET wa_sent = $1, status = CASE WHEN $1 = TRUE THEN $2 ELSE status END WHERE id = $3',
+            [waSent, 'Completed', customer.id]);
 
-        res.json({ success: waSent, message: waSent ? 'Pesan berhasil dikirim ulang' : 'Gagal kirim ulang' });
+        res.json({ success: waSent, message: waSent ? 'Pesan berhasil dikirim ulang' : ('Gagal kirim ulang: ' + (waResult?.error || 'WA tidak tersedia')) });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1461,7 +1462,8 @@ exports.retryAllWA = async (req, res) => {
             try {
                 const waResult = await whatsappService.sendAutoReply({ nama_lengkap: customer.nama_lengkap, whatsapp: customer.whatsapp });
                 const waSent = waResult && waResult.success;
-                await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customer.id]);
+                await db.query('UPDATE customers SET wa_sent = $1, status = CASE WHEN $1 = TRUE THEN $2 ELSE status END WHERE id = $3',
+                    [waSent, 'Completed', customer.id]);
                 if (waSent) sent++; else failed++;
                 // Anti-spam delay
                 await new Promise(r => setTimeout(r, 3000 + Math.random() * 5000));

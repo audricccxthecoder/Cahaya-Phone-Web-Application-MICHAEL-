@@ -2122,10 +2122,19 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
                 if (c.greeting_status === 'sent') {
                     statusBadge = '<span style="background:#DCFCE7;color:#16A34A;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Terkirim</span>';
-                    const sentTime = c.sent_at ? new Date(c.sent_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
-                    if (sentTime) statusBadge += `<br><span style="font-size:10px;color:#8C8078;">${sentTime}</span>`;
+                    if (c.sent_at) {
+                        try {
+                            const d = new Date(c.sent_at);
+                            const jam = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Makassar' });
+                            statusBadge += `<br><span style="font-size:10px;color:#8C8078;">${jam} WITA</span>`;
+                        } catch(e) {}
+                    }
+                    actionBtn = `<button class="btn-small" onclick="sendBirthdayGreeting(${c.id})" style="font-size:11px;padding:4px 12px;">Kirim Ulang</button>`;
                 } else if (c.greeting_status === 'failed') {
                     statusBadge = '<span style="background:#FEE2E2;color:#DC2626;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Gagal</span>';
+                    if (c.greeting_error) {
+                        statusBadge += `<br><span style="font-size:10px;color:#DC2626;" title="${c.greeting_error}">${c.greeting_error.length > 30 ? c.greeting_error.substring(0, 30) + '...' : c.greeting_error}</span>`;
+                    }
                     actionBtn = `<button class="btn-small" onclick="sendBirthdayGreeting(${c.id})" style="font-size:11px;padding:4px 12px;">Kirim Ulang</button>`;
                 } else {
                     statusBadge = '<span style="background:#FEF3C7;color:#D97706;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Belum</span>';
@@ -2156,7 +2165,12 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         if (result && result.success) {
             alert('Ucapan berhasil dikirim!');
         } else {
-            alert('Gagal mengirim: ' + (result?.message || result?.error || 'Error'));
+            const errMsg = result?.message || result?.error || 'Error';
+            if (errMsg.toLowerCase().includes('tidak terdaftar')) {
+                alert('⚠️ Gagal kirim: ' + errMsg + '\n\nNomor ini tidak bisa menerima pesan WhatsApp.');
+            } else {
+                alert('Gagal mengirim: ' + errMsg);
+            }
         }
         loadBirthdayToday();
         loadBirthdayHistory();
@@ -2221,10 +2235,24 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
             result.data.forEach(h => {
                 const tgl = h.tanggal_lahir ? new Date(h.tanggal_lahir).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-';
-                const sentAt = h.sent_at ? new Date(h.sent_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
-                const badge = h.status === 'sent'
-                    ? '<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:6px;font-size:11px;">Terkirim</span>'
-                    : '<span style="background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:6px;font-size:11px;">Gagal</span>';
+                let sentAt = '-';
+                if (h.sent_at) {
+                    try {
+                        const d = new Date(h.sent_at);
+                        const tglSent = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Makassar' });
+                        const jam = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Makassar' });
+                        sentAt = `${tglSent} ${jam} WITA`;
+                    } catch(e) {}
+                }
+                let badge;
+                if (h.status === 'sent') {
+                    badge = '<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:6px;font-size:11px;">Terkirim</span>';
+                } else {
+                    badge = '<span style="background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:6px;font-size:11px;">Gagal</span>';
+                    if (h.error) {
+                        badge += `<br><span style="font-size:10px;color:#DC2626;" title="${h.error}">${h.error.length > 25 ? h.error.substring(0, 25) + '...' : h.error}</span>`;
+                    }
+                }
 
                 html += `<tr>
                     <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:13px;">${h.nama_lengkap}</td>

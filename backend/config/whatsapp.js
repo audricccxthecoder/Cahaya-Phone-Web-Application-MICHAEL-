@@ -118,6 +118,31 @@ class WhatsAppService {
     }
 
     /**
+     * Cek apakah nomor terdaftar di WhatsApp
+     */
+    async isNumberRegistered(phoneNumber) {
+        const formattedNumber = sanitizePhone(phoneNumber);
+        if (!formattedNumber || !formattedNumber.startsWith('62')) {
+            return { registered: false, error: 'Nomor tidak valid' };
+        }
+
+        if (this.isWAReady) {
+            try {
+                const numberId = await this.waClient.client.getNumberId(formattedNumber).catch(() => null);
+                if (!numberId) {
+                    return { registered: false, error: `Nomor ${formattedNumber} tidak terdaftar di WhatsApp` };
+                }
+                return { registered: true };
+            } catch (err) {
+                return { registered: false, error: err.message };
+            }
+        }
+
+        // Jika WA Client tidak ready, tidak bisa cek — skip validation
+        return { registered: true, unchecked: true };
+    }
+
+    /**
      * Get WA Client status (untuk admin dashboard)
      */
     getStatus() {

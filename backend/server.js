@@ -3,6 +3,16 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// ============================================
+// GLOBAL ERROR HANDLERS — prevent server crash
+// ============================================
+process.on('uncaughtException', (err) => {
+    console.error('[CRASH PREVENTED] Uncaught Exception:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[CRASH PREVENTED] Unhandled Rejection:', reason);
+});
+
 const app = express();
 
 // ============================================

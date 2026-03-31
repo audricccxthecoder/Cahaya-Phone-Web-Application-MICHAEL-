@@ -127,6 +127,7 @@ class WAClient extends EventEmitter {
             } catch (e) {
                 console.warn('[WA] Could not get client info:', e.message);
             }
+
         });
 
         // Disconnected — auto-reconnect
@@ -168,26 +169,35 @@ class WAClient extends EventEmitter {
         // Hanya LAPOR ke Backend. Tidak kirim apa-apa.
         // ============================================
         this.client.on('message', async (msg) => {
-            // Abaikan group, status, broadcast, pesan sendiri
-            if (msg.isGroupMsg || msg.from.endsWith('@g.us') || msg.isStatus || msg.fromMe || msg.from === 'status@broadcast') return;
+            try {
+                // Abaikan group, status, broadcast, pesan sendiri
+                if (msg.isGroupMsg || msg.from.endsWith('@g.us') || msg.isStatus || msg.fromMe || msg.from === 'status@broadcast') return;
 
-            const phone = msg.from.replace('@c.us', '');
-            const text = msg.body;
-            const contact = await msg.getContact();
-            const senderName = contact.pushname || contact.name || '';
+                const phone = msg.from.replace('@c.us', '');
+                const text = msg.body;
+                let senderName = '';
+                try {
+                    const contact = await msg.getContact();
+                    senderName = contact.pushname || contact.name || '';
+                } catch (e) {
+                    console.warn('[WA] Could not get contact info:', e.message);
+                }
 
-            console.log(`[WA MSG IN] ${senderName} (${phone}): ${text.substring(0, 50)}...`);
+                console.log(`[WA MSG IN] ${senderName} (${phone}): ${text.substring(0, 50)}...`);
 
-            // LAPOR ke Backend — emit event, backend yang handle semua logika
-            this.emit('message_received', {
-                sender: phone,
-                message: text,
-                pushname: senderName,
-                timestamp: msg.timestamp,
-                source: 'wa-bridge'
-            });
+                // LAPOR ke Backend — emit event, backend yang handle semua logika
+                this.emit('message_received', {
+                    sender: phone,
+                    message: text,
+                    pushname: senderName,
+                    timestamp: msg.timestamp,
+                    source: 'wa-bridge'
+                });
 
-            // TIDAK kirim auto-reply. TIDAK cek database. BODOH. Titik.
+                // TIDAK kirim auto-reply. TIDAK cek database. BODOH. Titik.
+            } catch (err) {
+                console.error('[WA] Error processing message:', err.message);
+            }
         });
     }
 
@@ -252,7 +262,16 @@ class WAClient extends EventEmitter {
                 await this._randomDelay(delay.min, delay.max);
 
                 const chatId = task.phone.includes('@c.us') ? task.phone : `${task.phone}@c.us`;
-                await this.client.sendMessage(chatId, task.message);
+
+                // Cek dulu apakah nomor terdaftar di WhatsApp
+                const numberId = await this.client.getNumberId(task.phone).catch(() => null);
+                if (!numberId) {
+                    throw new Error(`Nomor ${task.phone} tidak terdaftar di WhatsApp`);
+                }
+
+                // Kirim pakai ID yang sudah diverifikasi
+                const verifiedChatId = numberId._serialized;
+                await this.client.sendMessage(verifiedChatId, task.message);
 
                 this.antiBan.sentCount++;
                 this.state.messagesSentToday = this.antiBan.sentCount;

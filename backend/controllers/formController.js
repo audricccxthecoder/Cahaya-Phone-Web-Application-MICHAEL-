@@ -146,10 +146,11 @@ exports.submitForm = async (req, res) => {
             try {
                 const waResult = await whatsappService.sendAutoReply({ nama_lengkap: finalName, whatsapp: cleanPhone });
                 const waSent = waResult && waResult.success;
-                await db.query('UPDATE customers SET wa_sent = $1 WHERE id = $2', [waSent, customerId]);
+                await db.query('UPDATE customers SET wa_sent = $1, status = $2 WHERE id = $3',
+                    [waSent, waSent ? 'Completed' : 'New', customerId]);
             } catch (waError) {
                 console.warn('⚠️ WhatsApp auto-reply failed:', waError.message || waError);
-                await db.query('UPDATE customers SET wa_sent = FALSE WHERE id = $1', [customerId]).catch(() => {});
+                await db.query('UPDATE customers SET wa_sent = FALSE, status = $1 WHERE id = $2', ['New', customerId]).catch(() => {});
             }
         })();
 
