@@ -129,12 +129,12 @@ class WhatsAppService {
         if (this.isWAReady) {
             try {
                 const numberId = await this.waClient.client.getNumberId(formattedNumber).catch(() => null);
-                if (!numberId) {
-                    return { registered: false, error: `Nomor ${formattedNumber} tidak terdaftar di WhatsApp` };
-                }
-                return { registered: true };
+                // getNumberId bisa return null meski nomor valid (limitation library)
+                // Jadi kalau null, anggap registered — biar WhatsApp sendiri yang validasi saat kirim
+                return { registered: true, verified: !!numberId };
             } catch (err) {
-                return { registered: false, error: err.message };
+                // Error juga bukan berarti nomor tidak ada — skip validation
+                return { registered: true, unchecked: true };
             }
         }
 

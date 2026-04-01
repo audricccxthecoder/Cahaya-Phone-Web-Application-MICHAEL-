@@ -263,15 +263,18 @@ class WAClient extends EventEmitter {
 
                 const chatId = task.phone.includes('@c.us') ? task.phone : `${task.phone}@c.us`;
 
-                // Cek dulu apakah nomor terdaftar di WhatsApp
-                const numberId = await this.client.getNumberId(task.phone).catch(() => null);
-                if (!numberId) {
-                    throw new Error(`Nomor ${task.phone} tidak terdaftar di WhatsApp`);
+                // Coba verifikasi nomor, tapi jangan block kalau getNumberId gagal
+                let sendTo = chatId;
+                try {
+                    const numberId = await this.client.getNumberId(task.phone);
+                    if (numberId && numberId._serialized) {
+                        sendTo = numberId._serialized;
+                    }
+                } catch (e) {
+                    console.warn(`[WA] getNumberId failed for ${task.phone}, sending with default chatId`);
                 }
 
-                // Kirim pakai ID yang sudah diverifikasi
-                const verifiedChatId = numberId._serialized;
-                await this.client.sendMessage(verifiedChatId, task.message);
+                await this.client.sendMessage(sendTo, task.message);
 
                 this.antiBan.sentCount++;
                 this.state.messagesSentToday = this.antiBan.sentCount;
