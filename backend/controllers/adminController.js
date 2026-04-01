@@ -87,7 +87,7 @@ function randomDelay(minMs, maxMs) {
 async function getDailySentCount() {
     const { rows } = await db.query(
         `SELECT COUNT(*) as count FROM broadcast_recipients
-         WHERE status = 'sent' AND sent_at::date = CURRENT_DATE`
+         WHERE status = 'sent' AND (sent_at AT TIME ZONE 'Asia/Makassar')::date = (NOW() AT TIME ZONE 'Asia/Makassar')::date`
     );
     return parseInt(rows[0].count) || 0;
 }

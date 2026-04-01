@@ -285,7 +285,7 @@ async function migrate() {
         SUM(CASE WHEN status = 'Follow Up' THEN 1 ELSE 0 END) as followup_customers,
         SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_customers,
         SUM(CASE WHEN status = 'Inactive' THEN 1 ELSE 0 END) as inactive_customers,
-        SUM(CASE WHEN DATE(created_at) = CURRENT_DATE THEN 1 ELSE 0 END) as today_customers,
+        SUM(CASE WHEN (created_at AT TIME ZONE 'Asia/Makassar')::date = (NOW() AT TIME ZONE 'Asia/Makassar')::date THEN 1 ELSE 0 END) as today_customers,
         SUM(CASE WHEN source NOT IN ('Website','Instagram','Facebook','TikTok','Teman/Keluarga') THEN 1 ELSE 0 END) as from_others
       FROM customers
     `);

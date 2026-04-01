@@ -17,10 +17,10 @@ async function getBirthdayToday() {
                bg.id as greeting_id, bg.status as greeting_status, bg.sent_at, bg.error as greeting_error
         FROM customers c
         LEFT JOIN birthday_greetings bg
-            ON bg.customer_id = c.id AND bg.greeting_year = EXTRACT(YEAR FROM CURRENT_DATE)
+            ON bg.customer_id = c.id AND bg.greeting_year = EXTRACT(YEAR FROM (NOW() AT TIME ZONE 'Asia/Makassar'))
         WHERE c.tanggal_lahir IS NOT NULL
-          AND EXTRACT(MONTH FROM c.tanggal_lahir) = EXTRACT(MONTH FROM CURRENT_DATE)
-          AND EXTRACT(DAY FROM c.tanggal_lahir) = EXTRACT(DAY FROM CURRENT_DATE)
+          AND EXTRACT(MONTH FROM c.tanggal_lahir) = EXTRACT(MONTH FROM (NOW() AT TIME ZONE 'Asia/Makassar'))
+          AND EXTRACT(DAY FROM c.tanggal_lahir) = EXTRACT(DAY FROM (NOW() AT TIME ZONE 'Asia/Makassar'))
           AND c.opted_in IS NOT FALSE
         ORDER BY c.nama_lengkap
     `);
