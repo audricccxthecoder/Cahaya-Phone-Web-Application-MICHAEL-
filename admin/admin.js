@@ -869,7 +869,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             html += `<td><span class="badge ${sourceClass}">${customer.source}</span></td>
                 <td><span class="badge ${statusClass}">${customer.status}</span></td>
                 <td>${time}</td>
-                <td><button class="btn-small" onclick="viewCustomer(${customer.id})">Detail</button></td>
+                <td><button class="btn-small" data-cid="${customer.id}" onclick="viewCustomer(${customer.id})" style="cursor:pointer;">Detail</button></td>
             </tr>`;
         });
 
@@ -1036,7 +1036,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 <td style="text-align:center;font-size:18px;">${waIcon}</td>
                 <td>${date}</td>
                 <td><div class="table-actions">
-                    <button class="btn-small" onclick="viewCustomer(${customer.id})">Detail</button>
+                    <button class="btn-small" data-cid="${customer.id}" onclick="viewCustomer(${customer.id})" style="cursor:pointer;">Detail</button>
                 </div></td>
             </tr>`;
         });
@@ -1087,20 +1087,35 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         const search = document.getElementById('searchCustomer').value.toLowerCase().trim();
         const source = document.getElementById('filterSource').value;
         const status = document.getElementById('filterStatus').value;
+        const merk = document.getElementById('filterMerk').value;
+        const sortBy = document.getElementById('sortCustomers').value;
         const dateFrom = document.getElementById('filterDateFrom').value;
         const dateTo = document.getElementById('filterDateTo').value;
 
         // Filter by active tab
         let filtered = allCustomers.filter(c => (c.tipe || 'Belanja') === activeTab);
-        if (search) filtered = filtered.filter(c => c.nama_lengkap.toLowerCase().includes(search));
+        if (search) filtered = filtered.filter(c => c.nama_lengkap.toLowerCase().includes(search) || (c.whatsapp && c.whatsapp.includes(search)));
         if (source) filtered = filtered.filter(c => c.source === source);
         if (status) filtered = filtered.filter(c => c.status === status);
+        if (merk) filtered = filtered.filter(c => c.merk_unit && c.merk_unit.toLowerCase().includes(merk.toLowerCase()));
         if (dateFrom) filtered = filtered.filter(c => new Date(c.created_at) >= new Date(dateFrom));
         if (dateTo) {
             const to = new Date(dateTo);
             to.setDate(to.getDate() + 1);
             filtered = filtered.filter(c => new Date(c.created_at) < to);
         }
+
+        // Sorting
+        if (sortBy === 'newest') {
+            filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        } else if (sortBy === 'oldest') {
+            filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        } else if (sortBy === 'cheapest') {
+            filtered.sort((a, b) => (Number(a.harga) || 0) - (Number(b.harga) || 0));
+        } else if (sortBy === 'expensive') {
+            filtered.sort((a, b) => (Number(b.harga) || 0) - (Number(a.harga) || 0));
+        }
+
         currentPage = 1;
         displayCustomers(filtered);
     }
@@ -1108,20 +1123,55 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     document.getElementById('searchCustomer').addEventListener('input', applyFilters);
     document.getElementById('filterSource').addEventListener('change', applyFilters);
     document.getElementById('filterStatus').addEventListener('change', applyFilters);
+    document.getElementById('filterMerk').addEventListener('change', applyFilters);
+    document.getElementById('sortCustomers').addEventListener('change', applyFilters);
     document.getElementById('filterDateFrom').addEventListener('change', applyFilters);
     document.getElementById('filterDateTo').addEventListener('change', applyFilters);
 
     // Status is now fully automatic — no manual update needed
 
-    // View customer detail
+    // View customer detail — with loading state & error feedback
     window.viewCustomer = async function(customerId) {
         console.log(`👁️ Viewing customer ${customerId}`);
-        const result = await apiCall(`/admin/customers/${customerId}`);
-        
-        if (result && result.success) {
-            showCustomerDetail(result.data);
+        if (!customerId) { alert('ID customer tidak valid'); return; }
+
+        // Show loading in modal immediately
+        const modal = document.getElementById('customerModal');
+        const detail = document.getElementById('customerDetail');
+        detail.innerHTML = '<div class="loading">Memuat data customer...</div>';
+        modal.classList.add('show');
+
+        try {
+            const result = await apiCall(`/admin/customers/${customerId}`);
+            if (result && result.success) {
+                showCustomerDetail(result.data);
+            } else {
+                detail.innerHTML = '<div class="no-data">Gagal memuat data customer</div>';
+            }
+        } catch (err) {
+            console.error('viewCustomer error:', err);
+            detail.innerHTML = '<div class="no-data">Terjadi kesalahan saat memuat data</div>';
         }
     };
+
+    // Event delegation for Detail buttons (backup for inline onclick)
+    document.getElementById('customersTable').addEventListener('click', function(e) {
+        const btn = e.target.closest('button.btn-small');
+        if (btn && btn.textContent.trim() === 'Detail') {
+            const row = btn.closest('tr');
+            if (row) {
+                const cid = btn.getAttribute('data-cid');
+                if (cid) viewCustomer(Number(cid));
+            }
+        }
+    });
+    document.getElementById('recentCustomers').addEventListener('click', function(e) {
+        const btn = e.target.closest('button.btn-small');
+        if (btn && btn.textContent.trim() === 'Detail') {
+            const cid = btn.getAttribute('data-cid');
+            if (cid) viewCustomer(Number(cid));
+        }
+    });
 
     function showCustomerDetail(customer) {
         const modal = document.getElementById('customerModal');
@@ -1138,33 +1188,37 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         const purchaseCount = customer.purchase_count || 0;
         const messages = customer.messages || [];
 
-        // Purchase history section
+        // Purchase history section — always show if there are purchases
         let purchaseHtml = '';
         if (purchaseCount > 0) {
             purchaseHtml = `
                 <div style="margin-top:20px;padding-top:20px;border-top:2px solid #EDE8E3;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
                         <h4 style="margin:0;font-size:15px;color:#1A1412;">Riwayat Pembelian</h4>
-                        <span style="background:#B91C1C;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;">${purchaseCount}x</span>
+                        <span style="background:#B91C1C;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;">${purchaseCount}x transaksi</span>
                     </div>
-                    <table style="width:100%;font-size:13px;">
-                        <thead><tr>
-                            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Tanggal</th>
-                            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Produk</th>
-                            <th style="text-align:right;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Harga</th>
-                            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;">Sales</th>
-                        </tr></thead>
-                        <tbody>
-                            ${purchases.map(p => `
-                                <tr>
-                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${formatTanggal(p.created_at)}</td>
-                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-weight:500;">${(p.merk_unit || '') + (p.tipe_unit ? ' ' + p.tipe_unit : '') || '-'}</td>
-                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;text-align:right;">${p.harga ? formatRpDetail(p.harga) : '-'}</td>
-                                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;">${p.nama_sales || '-'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                    <div style="overflow-x:auto;border:1px solid #EDE8E3;border-radius:8px;">
+                        <table style="width:100%;font-size:13px;border-collapse:collapse;">
+                            <thead><tr style="background:#FAFAF8;">
+                                <th style="text-align:left;padding:10px 8px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:600;font-size:11px;text-transform:uppercase;">Tanggal</th>
+                                <th style="text-align:left;padding:10px 8px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:600;font-size:11px;text-transform:uppercase;">Merk HP</th>
+                                <th style="text-align:left;padding:10px 8px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:600;font-size:11px;text-transform:uppercase;">Tipe HP</th>
+                                <th style="text-align:right;padding:10px 8px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:600;font-size:11px;text-transform:uppercase;">Harga</th>
+                                <th style="text-align:left;padding:10px 8px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:600;font-size:11px;text-transform:uppercase;">Sales</th>
+                            </tr></thead>
+                            <tbody>
+                                ${purchases.map((p, i) => `
+                                    <tr style="background:${i % 2 === 0 ? '#fff' : '#FAFAF8'};">
+                                        <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;white-space:nowrap;">${formatTanggal(p.created_at)}</td>
+                                        <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;font-weight:600;color:#B91C1C;">${p.merk_unit || '-'}</td>
+                                        <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;font-weight:500;">${p.tipe_unit || '-'}</td>
+                                        <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:right;font-weight:500;">${p.harga ? formatRpDetail(p.harga) : '-'}</td>
+                                        <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;">${p.nama_sales || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             `;
         }

@@ -31,13 +31,13 @@ class WhatsAppService {
     // ============================================
     async _bridgeCall(method, path, body = null, timeoutMs = 20000) {
         try {
-            const res = await axios({
-                method,
-                url: `${this.bridgeUrl}${path}`,
-                data: body,
-                headers: { 'X-WA-Secret': BRIDGE_SECRET, 'Content-Type': 'application/json' },
-                timeout: timeoutMs
-            });
+            const headers = { 'X-WA-Secret': BRIDGE_SECRET };
+            const config = { method, url: `${this.bridgeUrl}${path}`, headers, timeout: timeoutMs };
+            if (body !== null && body !== undefined) {
+                config.data = body;
+                headers['Content-Type'] = 'application/json';
+            }
+            const res = await axios(config);
             return res.data;
         } catch (err) {
             const status = err.response?.status;
