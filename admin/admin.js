@@ -1191,11 +1191,22 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         // Purchase history section — always show if there are purchases
         let purchaseHtml = '';
         if (purchaseCount > 0) {
+            const purchaseSummary = purchases.map((p, i) => `
+                <div style="display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px 0;border-bottom:1px solid #EDE8E3;font-size:13px;">
+                    <div style="color:#5C534B;">${formatTanggal(p.created_at)}</div>
+                    <div style="font-weight:600;color:#1A1412;">${(p.merk_unit || '-') + (p.tipe_unit ? ' ' + p.tipe_unit : '')}</div>
+                </div>
+            `).join('');
+
             purchaseHtml = `
                 <div style="margin-top:20px;padding-top:20px;border-top:2px solid #EDE8E3;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
                         <h4 style="margin:0;font-size:15px;color:#1A1412;">Riwayat Pembelian</h4>
                         <span style="background:#B91C1C;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;">${purchaseCount}x transaksi</span>
+                    </div>
+                    <div style="margin-bottom:16px;padding:14px 16px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;">
+                        <div style="font-size:13px;font-weight:600;color:#92400E;margin-bottom:8px;">Ringkasan Pembelian:</div>
+                        ${purchaseSummary}
                     </div>
                     <div style="overflow-x:auto;border:1px solid #EDE8E3;border-radius:8px;">
                         <table style="width:100%;font-size:13px;border-collapse:collapse;">
