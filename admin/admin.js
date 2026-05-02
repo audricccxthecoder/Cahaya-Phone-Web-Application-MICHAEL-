@@ -991,7 +991,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             <th>Nama</th>
             <th>WhatsApp</th>`;
         if (isBelanja) {
-            html += `<th>Sales</th><th>Produk</th><th>Harga</th><th>Metode</th>`;
+            html += `<th>Sales</th><th>Produk Terakhir</th><th>Harga Terakhir</th><th>Metode</th>`;
         } else {
             html += `<th>Catatan</th>`;
         }
@@ -1088,7 +1088,8 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         const source = document.getElementById('filterSource').value;
         const status = document.getElementById('filterStatus').value;
         const merk = document.getElementById('filterMerk').value;
-        const sortBy = document.getElementById('sortCustomers').value;
+        const sortWaktu = document.getElementById('sortWaktu').value;
+        const sortHarga = document.getElementById('sortHarga').value;
         const dateFrom = document.getElementById('filterDateFrom').value;
         const dateTo = document.getElementById('filterDateTo').value;
 
@@ -1097,7 +1098,14 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         if (search) filtered = filtered.filter(c => c.nama_lengkap.toLowerCase().includes(search) || (c.whatsapp && c.whatsapp.includes(search)));
         if (source) filtered = filtered.filter(c => c.source === source);
         if (status) filtered = filtered.filter(c => c.status === status);
-        if (merk) filtered = filtered.filter(c => c.merk_unit && c.merk_unit.toLowerCase().includes(merk.toLowerCase()));
+        if (merk) {
+            const target = merk.toLowerCase();
+            filtered = filtered.filter(c => {
+                const m = (c.merk_unit || '').toLowerCase();
+                const t = (c.tipe_unit || '').toLowerCase();
+                return m.includes(target) || t.includes(target);
+            });
+        }
         if (dateFrom) filtered = filtered.filter(c => new Date(c.created_at) >= new Date(dateFrom));
         if (dateTo) {
             const to = new Date(dateTo);
@@ -1105,15 +1113,15 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             filtered = filtered.filter(c => new Date(c.created_at) < to);
         }
 
-        // Sorting
-        if (sortBy === 'newest') {
-            filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        } else if (sortBy === 'oldest') {
-            filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        } else if (sortBy === 'cheapest') {
+        // Sorting — harga takes precedence if set, else waktu
+        if (sortHarga === 'cheapest') {
             filtered.sort((a, b) => (Number(a.harga) || 0) - (Number(b.harga) || 0));
-        } else if (sortBy === 'expensive') {
+        } else if (sortHarga === 'expensive') {
             filtered.sort((a, b) => (Number(b.harga) || 0) - (Number(a.harga) || 0));
+        } else if (sortWaktu === 'newest') {
+            filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        } else if (sortWaktu === 'oldest') {
+            filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         }
 
         currentPage = 1;
@@ -1124,7 +1132,19 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     document.getElementById('filterSource').addEventListener('change', applyFilters);
     document.getElementById('filterStatus').addEventListener('change', applyFilters);
     document.getElementById('filterMerk').addEventListener('change', applyFilters);
-    document.getElementById('sortCustomers').addEventListener('change', applyFilters);
+    // Sort waktu & harga: only one active at a time — selecting one resets the other
+    document.getElementById('sortWaktu').addEventListener('change', () => {
+        if (document.getElementById('sortWaktu').value) {
+            document.getElementById('sortHarga').value = '';
+        }
+        applyFilters();
+    });
+    document.getElementById('sortHarga').addEventListener('change', () => {
+        if (document.getElementById('sortHarga').value) {
+            document.getElementById('sortWaktu').value = '';
+        }
+        applyFilters();
+    });
     document.getElementById('filterDateFrom').addEventListener('change', applyFilters);
     document.getElementById('filterDateTo').addEventListener('change', applyFilters);
 
