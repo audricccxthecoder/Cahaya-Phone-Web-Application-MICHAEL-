@@ -1259,7 +1259,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         if (messages.length > 0) {
             const chatRows = messages.reverse().map(m => {
                 const time = formatWaktu(m.sent_at || m.created_at);
-                const isIncoming = m.direction === 'incoming';
+                const isIncoming = m.direction === 'in' || m.direction === 'incoming';
                 const dirBadge = isIncoming
                     ? '<span style="background:#DBEAFE;color:#2563EB;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">Masuk</span>'
                     : '<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">Keluar</span>';

@@ -346,9 +346,9 @@ exports.getCustomerById = async (req, res) => {
 
         // Include chat history (last 50 messages)
         const { rows: messages } = await db.query(
-            `SELECT id, direction, message, channel, sent_at, created_at
+            `SELECT id, direction, message, channel, sent_at
              FROM messages WHERE customer_id = $1
-             ORDER BY COALESCE(sent_at, created_at) DESC LIMIT 50`,
+             ORDER BY sent_at DESC LIMIT 50`,
             [id]
         );
 
