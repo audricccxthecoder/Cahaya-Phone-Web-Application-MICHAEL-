@@ -265,18 +265,42 @@ exports.getStats = async (req, res) => {
 exports.getPipelineMonthly = async (req, res) => {
     try {
         const { rows } = await db.query(`
+            WITH months AS (
+                SELECT generate_series(
+                    DATE_TRUNC('month', NOW()) - INTERVAL '11 months',
+                    DATE_TRUNC('month', NOW()),
+                    INTERVAL '1 month'
+                ) AS month_start
+            ),
+            cust AS (
+                SELECT
+                    DATE_TRUNC('month', created_at) AS month_start,
+                    COUNT(*) FILTER (WHERE status = 'Completed') AS sukses,
+                    COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up')) AS active,
+                    COUNT(*) FILTER (WHERE status = 'Inactive') AS lost,
+                    COUNT(*) AS total
+                FROM customers
+                GROUP BY DATE_TRUNC('month', created_at)
+            ),
+            omz AS (
+                SELECT
+                    DATE_TRUNC('month', created_at) AS month_start,
+                    COALESCE(SUM(harga * COALESCE(qty, 1)), 0) AS omzet
+                FROM purchases
+                GROUP BY DATE_TRUNC('month', created_at)
+            )
             SELECT
-                TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as bulan,
-                TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') as label,
-                COUNT(*) FILTER (WHERE status = 'Completed') as sukses,
-                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up')) as active,
-                COUNT(*) FILTER (WHERE status = 'Inactive') as lost,
-                COUNT(*) as total,
-                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed'), 0) as omzet
-            FROM customers
-            GROUP BY DATE_TRUNC('month', created_at)
-            ORDER BY DATE_TRUNC('month', created_at) DESC
-            LIMIT 12
+                TO_CHAR(m.month_start, 'YYYY-MM') AS bulan,
+                TO_CHAR(m.month_start, 'Mon YYYY') AS label,
+                COALESCE(c.sukses, 0)::int AS sukses,
+                COALESCE(c.active, 0)::int AS active,
+                COALESCE(c.lost, 0)::int AS lost,
+                COALESCE(c.total, 0)::int AS total,
+                COALESCE(o.omzet, 0) AS omzet
+            FROM months m
+            LEFT JOIN cust c ON c.month_start = m.month_start
+            LEFT JOIN omz o ON o.month_start = m.month_start
+            ORDER BY m.month_start DESC
         `);
         res.json({ success: true, data: rows });
     } catch (error) {
