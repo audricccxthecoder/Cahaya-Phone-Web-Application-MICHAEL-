@@ -213,25 +213,18 @@ exports.getStats = async (req, res) => {
 
         const { rows } = await db.query('SELECT * FROM customer_stats');
 
-        // Pipeline stats with month comparisons
+        // Pipeline stats from customers (registration-based: pipeline status, customer counts)
         const { rows: pipeline } = await db.query(`
             SELECT
                 COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up')) as pipeline_active,
                 COUNT(*) FILTER (WHERE status = 'Completed') as pipeline_success,
                 COUNT(*) FILTER (WHERE status = 'Inactive') as pipeline_lost,
-                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed'), 0) as total_omzet,
 
-                -- Bulan ini
-                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up') AND created_at >= DATE_TRUNC('month', NOW())) as active_bulan_ini,
-                COUNT(*) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW())) as success_bulan_ini,
-                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW())), 0) as omzet_bulan_ini,
+                -- New customer registrations
                 COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW())) as total_bulan_ini,
-
-                -- Bulan lalu
-                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up') AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as active_bulan_lalu,
-                COUNT(*) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as success_bulan_lalu,
-                COALESCE(SUM(harga * qty) FILTER (WHERE status = 'Completed' AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())), 0) as omzet_bulan_lalu,
                 COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as total_bulan_lalu,
+                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up') AND created_at >= DATE_TRUNC('month', NOW())) as active_bulan_ini,
+                COUNT(*) FILTER (WHERE status IN ('New','Contacted','Follow Up') AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as active_bulan_lalu,
 
                 -- Tipe
                 COUNT(*) FILTER (WHERE tipe = 'Belanja') as total_belanja,
@@ -244,9 +237,21 @@ exports.getStats = async (req, res) => {
             FROM customers
         `);
 
+        // Sales stats from purchases (transaction-date based: omzet & success counts).
+        // Repeat orders attribute to the actual purchase month, not customer registration month.
+        const { rows: sales } = await db.query(`
+            SELECT
+                COALESCE(SUM(harga * COALESCE(qty, 1)), 0) as total_omzet,
+                COALESCE(SUM(harga * COALESCE(qty, 1)) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW())), 0) as omzet_bulan_ini,
+                COALESCE(SUM(harga * COALESCE(qty, 1)) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())), 0) as omzet_bulan_lalu,
+                COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW())) as success_bulan_ini,
+                COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())) as success_bulan_lalu
+            FROM purchases
+        `);
+
         res.json({
             success: true,
-            data: { ...rows[0], ...pipeline[0] }
+            data: { ...rows[0], ...pipeline[0], ...sales[0] }
         });
 
     } catch (error) {
