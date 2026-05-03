@@ -2147,8 +2147,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 return;
             }
 
-            const { customers, message, autoSend } = result.data;
-            document.getElementById('birthdayAutoSend').checked = autoSend;
+            const { customers, message } = result.data;
             document.getElementById('birthdayMessageTemplate').value = message;
 
             if (customers.length === 0) {
@@ -2259,13 +2258,6 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
         } else {
             alert('Gagal menyimpan: ' + (result?.message || 'Error'));
         }
-    };
-
-    window.toggleBirthdayAutoSend = async function(enabled) {
-        await apiCall('/admin/birthday/auto-send', {
-            method: 'POST',
-            body: JSON.stringify({ enabled })
-        });
     };
 
     async function loadBirthdayHistory() {
