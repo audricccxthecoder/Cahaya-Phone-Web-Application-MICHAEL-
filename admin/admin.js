@@ -642,6 +642,8 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             } else if (targetPage === 'messages') {
                 loadMessages();
                 loadCleanupStatus();
+            } else if (targetPage === 'settings') {
+                loadSettingsPage();
             }
         });
     });
@@ -900,7 +902,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     };
 
     window.refreshDashboard = async function() {
-        pipelineMonthlyData = null;
+        if (typeof pipelineCache !== 'undefined') pipelineCache.clear();
         await loadDashboard();
     };
 
@@ -916,7 +918,7 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
             const page = activePage ? activePage.dataset.page : 'dashboard';
 
             // Refresh semua data inti
-            pipelineMonthlyData = null;
+            if (typeof pipelineCache !== 'undefined') pipelineCache.clear();
             await loadDashboard();
             loadCleanupBanner();
             checkWADisconnectBanner();
@@ -1206,7 +1208,6 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
 
         const purchases = customer.purchases || [];
         const purchaseCount = customer.purchase_count || 0;
-        const messages = customer.messages || [];
 
         // Purchase history section — always show if there are purchases
         let purchaseHtml = '';
@@ -1250,52 +1251,6 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                             </tbody>
                         </table>
                     </div>
-                </div>
-            `;
-        }
-
-        // Chat history section
-        let chatHtml = '';
-        if (messages.length > 0) {
-            const chatRows = messages.reverse().map(m => {
-                const time = formatWaktu(m.sent_at || m.created_at);
-                const isIncoming = m.direction === 'in' || m.direction === 'incoming';
-                const dirBadge = isIncoming
-                    ? '<span style="background:#DBEAFE;color:#2563EB;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">Masuk</span>'
-                    : '<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">Keluar</span>';
-                const msgText = (m.message || '').length > 80 ? m.message.substring(0, 80) + '...' : (m.message || '-');
-                return `<tr>
-                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:12px;color:#8C8078;white-space:nowrap;">${time}</td>
-                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;text-align:center;">${dirBadge}</td>
-                    <td style="padding:8px 6px;border-bottom:1px solid #F5F3F0;font-size:12px;word-break:break-word;">${msgText}</td>
-                </tr>`;
-            }).join('');
-
-            chatHtml = `
-                <div style="margin-top:20px;padding-top:20px;border-top:2px solid #EDE8E3;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-                        <h4 style="margin:0;font-size:15px;color:#1A1412;">Riwayat Chat WA</h4>
-                        <span style="background:#25D366;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;">${messages.length} pesan</span>
-                    </div>
-                    <div style="max-height:250px;overflow-y:auto;border:1px solid #EDE8E3;border-radius:8px;">
-                        <table style="width:100%;font-size:13px;border-collapse:collapse;">
-                            <thead><tr style="position:sticky;top:0;background:#FAFAF8;">
-                                <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;font-size:11px;">WAKTU</th>
-                                <th style="text-align:center;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;font-size:11px;">ARAH</th>
-                                <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #EDE8E3;color:#8C8078;font-weight:500;font-size:11px;">PESAN</th>
-                            </tr></thead>
-                            <tbody>${chatRows}</tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-        } else {
-            chatHtml = `
-                <div style="margin-top:20px;padding-top:20px;border-top:2px solid #EDE8E3;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-                        <h4 style="margin:0;font-size:15px;color:#1A1412;">Riwayat Chat WA</h4>
-                    </div>
-                    <div style="text-align:center;padding:20px;color:#8C8078;font-size:13px;">Belum ada riwayat chat</div>
                 </div>
             `;
         }
@@ -1380,7 +1335,6 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
                 </div>
             </div>
             ${purchaseHtml}
-            ${chatHtml}
         `;
 
         modal.classList.add('show');
@@ -2502,76 +2456,173 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     }
 
     // ============================================
-    // PIPELINE DETAIL MODAL
+    // PIPELINE DETAIL MODAL — with year selector & archive
     // ============================================
 
-    let pipelineMonthlyData = null;
+    const pipelineCache = new Map();   // key: year -> { data, meta }
+    let pipelineState = { year: null, type: 'success' };
+
+    async function fetchPipelineYear(year) {
+        if (pipelineCache.has(year)) return pipelineCache.get(year);
+        const resp = await apiCall(`/admin/pipeline/monthly?year=${year}`);
+        if (resp && resp.success) {
+            const payload = { data: resp.data, meta: resp.meta };
+            pipelineCache.set(year, payload);
+            return payload;
+        }
+        return null;
+    }
 
     window.showPipelineDetail = async function(type) {
         const modal = document.getElementById('pipelineModal');
-        const title = document.getElementById('pipelineModalTitle');
         const body = document.getElementById('pipelineModalBody');
 
-        // Load monthly data if not cached
-        if (!pipelineMonthlyData) {
-            body.innerHTML = '<div class="loading">Loading...</div>';
-            modal.classList.add('show');
-            const resp = await apiCall('/admin/pipeline/monthly');
-            if (resp && resp.success) {
-                pipelineMonthlyData = resp.data;
-            } else {
-                body.innerHTML = '<div class="no-data">Gagal memuat data</div>';
-                return;
-            }
-        }
-
         modal.classList.add('show');
-        const months = pipelineMonthlyData;
+        body.innerHTML = '<div class="loading">Memuat data...</div>';
+
+        // Default to current year on first open
+        if (!pipelineState.year) {
+            const initial = await fetchPipelineYear(new Date().getFullYear());
+            if (!initial) { body.innerHTML = '<div class="no-data">Gagal memuat</div>'; return; }
+            pipelineState.year = initial.meta.year;
+        }
+        pipelineState.type = type || pipelineState.type || 'success';
+        renderPipelineModal();
+    };
+
+    window.closePipelineModal = function() {
+        document.getElementById('pipelineModal').classList.remove('show');
+    };
+
+    window.changePipelineYear = async function(direction) {
+        const cached = pipelineCache.get(pipelineState.year);
+        const meta = cached && cached.meta;
+        if (!meta) return;
+        const years = meta.availableYears || [meta.currentYear];
+        const idx = years.indexOf(pipelineState.year);
+        const newIdx = idx + direction;  // direction: -1 = older, +1 = newer
+        if (newIdx < 0 || newIdx >= years.length) return;
+        const newYear = years[newIdx];
+        const body = document.getElementById('pipelineModalBody');
+        body.innerHTML = '<div class="loading">Memuat ' + newYear + '...</div>';
+        await fetchPipelineYear(newYear);
+        pipelineState.year = newYear;
+        renderPipelineModal();
+    };
+
+    window.switchPipelineType = function(type) {
+        pipelineState.type = type;
+        renderPipelineModal();
+    };
+
+    function renderPipelineModal() {
+        const title = document.getElementById('pipelineModalTitle');
+        const body = document.getElementById('pipelineModalBody');
+        const cached = pipelineCache.get(pipelineState.year);
+        if (!cached) { body.innerHTML = '<div class="no-data">Data belum dimuat</div>'; return; }
+
+        const months = cached.data;
+        const meta = cached.meta;
+        const type = pipelineState.type;
         const formatRp = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
 
-        if (type === 'success') {
-            title.textContent = 'Detail Transaksi Sukses Per Bulan';
-            let html = '<table style="width:100%;"><thead><tr><th>Bulan</th><th>Sukses</th><th>Total</th><th>Rate</th><th>Perubahan</th></tr></thead><tbody>';
-            months.forEach((m, i) => {
-                const prev = months[i + 1];
+        const years = meta.availableYears || [meta.currentYear];
+        const idx = years.indexOf(pipelineState.year);
+        const canPrev = idx < years.length - 1;  // older = larger idx
+        const canNext = idx > 0;
+
+        const yearBadge = meta.isArchive
+            ? '<span style="background:rgba(107,114,128,0.1);color:#6B7280;font-size:11px;padding:3px 10px;border-radius:10px;font-weight:600;margin-left:8px;">Arsip</span>'
+            : (meta.isFuture
+                ? '<span style="background:rgba(37,99,235,0.1);color:#2563EB;font-size:11px;padding:3px 10px;border-radius:10px;font-weight:600;margin-left:8px;">Mendatang</span>'
+                : '<span style="background:rgba(22,163,74,0.1);color:#16A34A;font-size:11px;padding:3px 10px;border-radius:10px;font-weight:600;margin-left:8px;">Aktif</span>');
+
+        title.innerHTML = (type === 'omzet' ? 'Detail Omzet Per Bulan' : 'Detail Transaksi Sukses Per Bulan');
+
+        let tableHtml = '';
+        if (months.length === 0) {
+            tableHtml = '<div style="text-align:center;padding:40px;color:#8C8078;">Belum ada data untuk ' + pipelineState.year + '</div>';
+        } else if (type === 'success') {
+            const rows = months.map((m, i) => {
+                const prev = months[i - 1];
                 const rate = Number(m.total) > 0 ? (Number(m.sukses) / Number(m.total) * 100).toFixed(1) : '0.0';
-                let change = '-';
+                let change = '<span style="color:#8C8078;">—</span>';
                 if (prev) {
                     const diff = Number(m.sukses) - Number(prev.sukses);
                     if (diff > 0) change = `<span style="color:#16A34A;">▲ +${diff}</span>`;
                     else if (diff < 0) change = `<span style="color:#DC2626;">▼ ${diff}</span>`;
-                    else change = `<span style="color:#8C8078;">—</span>`;
                 }
-                html += `<tr><td>${m.label}</td><td><strong>${m.sukses}</strong></td><td>${m.total}</td><td>${rate}%</td><td>${change}</td></tr>`;
-            });
-            html += '</tbody></table>';
-            body.innerHTML = html;
-
-        } else if (type === 'omzet') {
-            title.textContent = 'Detail Omzet Per Bulan';
-            let html = '<table style="width:100%;"><thead><tr><th>Bulan</th><th>Omzet</th><th>Transaksi</th><th>Perubahan</th></tr></thead><tbody>';
-            months.forEach((m, i) => {
-                const prev = months[i + 1];
+                return `<tr><td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;">${m.label}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;"><strong style="color:#16A34A;">${m.sukses}</strong></td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;">${m.total}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;">${rate}%</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;">${change}</td></tr>`;
+            }).join('');
+            tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead><tr style="background:#FAFAF8;">
+                    <th style="padding:10px 8px;text-align:left;font-size:11px;color:#8C8078;">BULAN</th>
+                    <th style="padding:10px 8px;text-align:center;font-size:11px;color:#8C8078;">SUKSES</th>
+                    <th style="padding:10px 8px;text-align:center;font-size:11px;color:#8C8078;">TOTAL</th>
+                    <th style="padding:10px 8px;text-align:center;font-size:11px;color:#8C8078;">RATE</th>
+                    <th style="padding:10px 8px;text-align:center;font-size:11px;color:#8C8078;">PERUBAHAN</th>
+                </tr></thead><tbody>${rows}</tbody></table>`;
+        } else {
+            const rows = months.map((m, i) => {
+                const prev = months[i - 1];
                 const omzet = Number(m.omzet) || 0;
-                let change = '-';
+                let change = '<span style="color:#8C8078;">—</span>';
                 if (prev) {
                     const prevOmzet = Number(prev.omzet) || 0;
                     const diff = omzet - prevOmzet;
                     if (prevOmzet > 0) {
                         const pct = ((diff / prevOmzet) * 100).toFixed(1);
-                        if (diff > 0) change = `<span style="color:#16A34A;">▲ +${pct}% (+${formatRp(diff)})</span>`;
-                        else if (diff < 0) change = `<span style="color:#DC2626;">▼ ${pct}% (${formatRp(diff)})</span>`;
-                        else change = `<span style="color:#8C8078;">—</span>`;
+                        if (diff > 0) change = `<span style="color:#16A34A;">▲ +${pct}%</span>`;
+                        else if (diff < 0) change = `<span style="color:#DC2626;">▼ ${pct}%</span>`;
                     } else if (omzet > 0) {
                         change = `<span style="color:#16A34A;">▲ Baru</span>`;
                     }
                 }
-                html += `<tr><td>${m.label}</td><td><strong>${formatRp(omzet)}</strong></td><td>${m.sukses}</td><td>${change}</td></tr>`;
-            });
-            html += '</tbody></table>';
-            body.innerHTML = html;
+                return `<tr><td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;">${m.label}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:right;"><strong style="color:#B91C1C;">${formatRp(omzet)}</strong></td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;">${m.sukses}</td>
+                    <td style="padding:10px 8px;border-bottom:1px solid #F5F3F0;text-align:center;">${change}</td></tr>`;
+            }).join('');
+            tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead><tr style="background:#FAFAF8;">
+                    <th style="padding:10px 8px;text-align:left;font-size:11px;color:#8C8078;">BULAN</th>
+                    <th style="padding:10px 8px;text-align:right;font-size:11px;color:#8C8078;">OMZET</th>
+                    <th style="padding:10px 8px;text-align:center;font-size:11px;color:#8C8078;">TRANSAKSI</th>
+                    <th style="padding:10px 8px;text-align:center;font-size:11px;color:#8C8078;">PERUBAHAN</th>
+                </tr></thead><tbody>${rows}</tbody></table>`;
         }
-    };
+
+        const archiveNotice = meta.isArchive
+            ? '<div style="background:#FAFAF8;border:1px solid #EDE8E3;padding:8px 12px;border-radius:6px;font-size:12px;color:#5C534B;margin-bottom:12px;"><strong>Arsip ' + pipelineState.year + '</strong> — data tahun lewat, hanya untuk referensi.</div>'
+            : (meta.year === meta.currentYear
+                ? '<div style="font-size:11px;color:#8C8078;margin-bottom:12px;">Menampilkan dari bulan saat ini hingga Desember ' + meta.currentYear + '. Data bulan lewat tahun ini juga ada di arsip tahun depan.</div>'
+                : '');
+
+        body.innerHTML = `
+            <!-- Year selector + type tabs -->
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <button onclick="changePipelineYear(-1)" ${canPrev ? '' : 'disabled'}
+                        style="padding:6px 10px;border:1px solid #EDE8E3;background:#fff;border-radius:6px;cursor:${canPrev ? 'pointer' : 'not-allowed'};opacity:${canPrev ? '1' : '0.4'};font-size:13px;">◀</button>
+                    <div style="font-weight:700;font-size:18px;color:#1A1412;padding:0 8px;display:flex;align-items:center;">
+                        ${pipelineState.year}${yearBadge}
+                    </div>
+                    <button onclick="changePipelineYear(1)" ${canNext ? '' : 'disabled'}
+                        style="padding:6px 10px;border:1px solid #EDE8E3;background:#fff;border-radius:6px;cursor:${canNext ? 'pointer' : 'not-allowed'};opacity:${canNext ? '1' : '0.4'};font-size:13px;">▶</button>
+                </div>
+                <div style="display:flex;gap:4px;background:#F5F3F0;border-radius:8px;padding:3px;">
+                    <button onclick="switchPipelineType('success')" style="padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:${type === 'success' ? '#fff' : 'transparent'};color:${type === 'success' ? '#1A1412' : '#8C8078'};box-shadow:${type === 'success' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'};">Sukses</button>
+                    <button onclick="switchPipelineType('omzet')" style="padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:${type === 'omzet' ? '#fff' : 'transparent'};color:${type === 'omzet' ? '#1A1412' : '#8C8078'};box-shadow:${type === 'omzet' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'};">Omzet</button>
+                </div>
+            </div>
+            ${archiveNotice}
+            ${tableHtml}
+        `;
+    }
 
     window.closePipelineModal = function() {
         document.getElementById('pipelineModal').classList.remove('show');
@@ -2649,12 +2700,242 @@ if (window.location.pathname.includes('dashboard') || window.location.pathname.i
     checkGoogleStatus();
 
     // ============================================
+    // SETTINGS PAGE — Akun Saya + Manajemen Admin
+    // ============================================
+
+    let currentAdminInfo = null;
+
+    async function fetchCurrentAdmin() {
+        const res = await apiCall('/admin/me');
+        if (res && res.success) {
+            currentAdminInfo = res.data;
+            // Show email-missing banner globally if no email yet
+            const banner = document.getElementById('emailMissingBanner');
+            if (banner) banner.style.display = currentAdminInfo.email ? 'none' : 'block';
+        }
+        return currentAdminInfo;
+    }
+
+    async function loadSettingsPage() {
+        const me = await fetchCurrentAdmin();
+        if (!me) return;
+        document.getElementById('myUsername').value = me.username || '';
+        document.getElementById('myNama').value = me.nama || '';
+        document.getElementById('myEmail').value = me.email || '';
+        const badge = document.getElementById('myRoleBadge');
+        if (me.role === 'owner') {
+            badge.textContent = 'Owner';
+            badge.style.background = 'rgba(185,28,28,0.08)';
+            badge.style.color = '#B91C1C';
+        } else {
+            badge.textContent = 'Staff';
+            badge.style.background = 'rgba(107,114,128,0.1)';
+            badge.style.color = '#6B7280';
+        }
+
+        // Manajemen admin (owner-only)
+        const mgmtCard = document.getElementById('adminMgmtCard');
+        if (me.role === 'owner') {
+            mgmtCard.style.display = 'block';
+            await loadAdminList();
+        } else {
+            mgmtCard.style.display = 'none';
+        }
+    }
+
+    async function loadAdminList() {
+        const container = document.getElementById('adminListContainer');
+        container.innerHTML = '<div class="loading">Memuat daftar admin...</div>';
+        const res = await apiCall('/admin/admins');
+        if (!res || !res.success) {
+            container.innerHTML = '<div class="no-data">Gagal memuat daftar admin</div>';
+            return;
+        }
+        const admins = res.data || [];
+        const max = res.max || 3;
+        document.getElementById('adminCountBadge').textContent = `${admins.length} / ${max}`;
+        document.getElementById('addAdminBtn').disabled = admins.length >= max;
+        document.getElementById('addAdminBtn').style.opacity = admins.length >= max ? '0.5' : '1';
+        document.getElementById('addAdminBtn').title = admins.length >= max ? `Maksimal ${max} admin` : '';
+
+        if (admins.length === 0) {
+            container.innerHTML = '<div class="no-data">Belum ada admin</div>';
+            return;
+        }
+
+        const isMe = (id) => currentAdminInfo && currentAdminInfo.id === id;
+        const rows = admins.map(a => {
+            const roleBadge = a.role === 'owner'
+                ? '<span style="background:rgba(185,28,28,0.08);color:#B91C1C;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Owner</span>'
+                : '<span style="background:rgba(107,114,128,0.1);color:#6B7280;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Staff</span>';
+            const meTag = isMe(a.id) ? '<span style="font-size:10px;color:#2563EB;font-weight:600;margin-left:6px;">(Anda)</span>' : '';
+            const canDelete = a.role !== 'owner' && !isMe(a.id);
+            const editBtn = `<button class="btn-small" onclick="openEditAdminModal(${a.id})" style="font-size:11px;padding:5px 12px;">Edit</button>`;
+            const delBtn = canDelete
+                ? `<button class="btn-small" onclick="deleteAdmin(${a.id}, '${(a.nama || a.username).replace(/'/g, "\\'")}')" style="font-size:11px;padding:5px 12px;background:rgba(185,28,28,0.08);color:#B91C1C;border-color:rgba(185,28,28,0.2);">Hapus</button>`
+                : '';
+            return `<tr style="border-bottom:1px solid #F5F3F0;">
+                <td style="padding:12px 8px;font-weight:600;">${a.username}${meTag}</td>
+                <td style="padding:12px 8px;">${a.nama || '-'}</td>
+                <td style="padding:12px 8px;color:${a.email ? '#1A1412' : '#B91C1C'};font-size:13px;">${a.email || '<em>belum diisi</em>'}</td>
+                <td style="padding:12px 8px;">${roleBadge}</td>
+                <td style="padding:12px 8px;text-align:right;display:flex;gap:6px;justify-content:flex-end;">${editBtn}${delBtn}</td>
+            </tr>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead><tr style="background:#FAFAF8;">
+                        <th style="text-align:left;padding:10px 8px;font-size:11px;color:#8C8078;font-weight:600;text-transform:uppercase;">Username</th>
+                        <th style="text-align:left;padding:10px 8px;font-size:11px;color:#8C8078;font-weight:600;text-transform:uppercase;">Nama</th>
+                        <th style="text-align:left;padding:10px 8px;font-size:11px;color:#8C8078;font-weight:600;text-transform:uppercase;">Email</th>
+                        <th style="text-align:left;padding:10px 8px;font-size:11px;color:#8C8078;font-weight:600;text-transform:uppercase;">Role</th>
+                        <th style="text-align:right;padding:10px 8px;font-size:11px;color:#8C8078;font-weight:600;text-transform:uppercase;">Aksi</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // Profile form submit
+    const profileForm = document.getElementById('profileForm');
+    if (profileForm) {
+        profileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const nama = document.getElementById('myNama').value.trim();
+            const email = document.getElementById('myEmail').value.trim();
+            if (!email) { alert('Email wajib diisi'); return; }
+            const res = await apiCall('/admin/profile', {
+                method: 'PATCH',
+                body: JSON.stringify({ nama, email })
+            });
+            if (res && res.success) {
+                alert('Profil tersimpan');
+                await fetchCurrentAdmin();
+                if (currentAdminInfo && currentAdminInfo.role === 'owner') await loadAdminList();
+            } else {
+                alert('Gagal: ' + (res?.message || 'Error'));
+            }
+        });
+    }
+
+    // Password form submit
+    const pwForm = document.getElementById('passwordForm');
+    if (pwForm) {
+        pwForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const cur = document.getElementById('curPassword').value;
+            const np = document.getElementById('newPassword').value;
+            const npc = document.getElementById('newPasswordConfirm').value;
+            if (np !== npc) { alert('Konfirmasi password tidak cocok'); return; }
+            if (np.length < 6) { alert('Password baru minimal 6 karakter'); return; }
+            const res = await apiCall('/admin/credentials', {
+                method: 'PATCH',
+                body: JSON.stringify({ current_password: cur, new_password: np })
+            });
+            if (res && res.success) {
+                alert('Password berhasil diubah');
+                if (res.token) localStorage.setItem('admin_token', res.token);
+                pwForm.reset();
+            } else {
+                alert('Gagal: ' + (res?.message || 'Error'));
+            }
+        });
+    }
+
+    // Add/Edit admin modal
+    window.openAddAdminModal = function() {
+        document.getElementById('adminModalTitle').textContent = 'Tambah Admin';
+        document.getElementById('adminFormId').value = '';
+        document.getElementById('adminForm').reset();
+        document.getElementById('adminFormPasswordRequired').style.display = 'inline';
+        document.getElementById('adminFormPassword').required = true;
+        document.getElementById('adminFormPasswordHint').textContent = 'Min 6 karakter.';
+        document.getElementById('adminFormUsername').disabled = false;
+        document.getElementById('adminFormError').style.display = 'none';
+        document.getElementById('adminModal').classList.add('show');
+    };
+
+    window.openEditAdminModal = async function(id) {
+        const res = await apiCall('/admin/admins');
+        if (!res || !res.success) return;
+        const a = (res.data || []).find(x => x.id === id);
+        if (!a) return;
+        document.getElementById('adminModalTitle').textContent = 'Edit Admin: ' + a.username;
+        document.getElementById('adminFormId').value = a.id;
+        document.getElementById('adminFormUsername').value = a.username;
+        document.getElementById('adminFormUsername').disabled = true;
+        document.getElementById('adminFormNama').value = a.nama || '';
+        document.getElementById('adminFormEmail').value = a.email || '';
+        document.getElementById('adminFormPassword').value = '';
+        document.getElementById('adminFormPassword').required = false;
+        document.getElementById('adminFormPasswordRequired').style.display = 'none';
+        document.getElementById('adminFormPasswordHint').textContent = 'Kosongkan jika tidak ingin diubah.';
+        document.getElementById('adminFormError').style.display = 'none';
+        document.getElementById('adminModal').classList.add('show');
+    };
+
+    window.closeAdminModal = function() {
+        document.getElementById('adminModal').classList.remove('show');
+    };
+
+    const adminBtn = document.getElementById('addAdminBtn');
+    if (adminBtn) adminBtn.addEventListener('click', () => window.openAddAdminModal());
+
+    const adminForm = document.getElementById('adminForm');
+    if (adminForm) {
+        adminForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errEl = document.getElementById('adminFormError');
+            errEl.style.display = 'none';
+            const id = document.getElementById('adminFormId').value;
+            const username = document.getElementById('adminFormUsername').value.trim();
+            const nama = document.getElementById('adminFormNama').value.trim();
+            const email = document.getElementById('adminFormEmail').value.trim();
+            const password = document.getElementById('adminFormPassword').value;
+
+            let res;
+            if (id) {
+                const body = { nama, email };
+                if (password) body.password = password;
+                res = await apiCall(`/admin/admins/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+            } else {
+                res = await apiCall('/admin/admins', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, nama, email, password })
+                });
+            }
+
+            if (res && res.success) {
+                window.closeAdminModal();
+                await loadAdminList();
+            } else {
+                errEl.textContent = res?.message || 'Gagal menyimpan admin';
+                errEl.style.display = 'block';
+            }
+        });
+    }
+
+    window.deleteAdmin = async function(id, label) {
+        if (!confirm(`Hapus admin "${label}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+        const res = await apiCall(`/admin/admins/${id}`, { method: 'DELETE' });
+        if (res && res.success) {
+            await loadAdminList();
+        } else {
+            alert('Gagal: ' + (res?.message || 'Error'));
+        }
+    };
+
+    // ============================================
     // INITIAL LOAD
     // ============================================
 
     loadDashboard();
     loadCleanupBanner();
     checkWADisconnectBanner();
+    fetchCurrentAdmin();
 }
 
 console.log('✅ Admin Panel initialized');

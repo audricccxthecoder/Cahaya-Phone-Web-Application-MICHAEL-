@@ -7,6 +7,7 @@ const db = require('../config/database');
 const whatsappService = require('../config/whatsapp');
 const googleService = require('../config/google');
 const { sanitizePhone, validatePhone } = require('../utils/phoneUtils');
+const { normalizeBrandAndModel } = require('../utils/brandUtils');
 
 /**
  * Submit customer form
@@ -43,6 +44,10 @@ exports.submitForm = async (req, res) => {
 
         const parsedHarga = harga ? parseFloat(harga) : null;
         const parsedQty = qty ? parseInt(qty, 10) : 1;
+
+        const cleaned = normalizeBrandAndModel(merk_unit, tipe_unit);
+        const cleanMerk = cleaned.merk_unit;
+        const cleanTipe = cleaned.tipe_unit;
 
         let source = 'Website';
         if (tahu_dari) {
@@ -94,7 +99,7 @@ exports.submitForm = async (req, res) => {
                     status = 'Completed', opted_in = $12, tipe = 'Belanja', updated_at = NOW()
                 WHERE id = $13 RETURNING id`,
                 [
-                    finalName, nama_sales || null, merk_unit || null, tipe_unit || null,
+                    finalName, nama_sales || null, cleanMerk, cleanTipe,
                     parsedHarga, parsedQty, tanggal_lahir || null, fullAddress,
                     metode_pembayaran || null, tahu_dari || null, source,
                     optedIn, existingCustomer[0].id
@@ -118,7 +123,7 @@ exports.submitForm = async (req, res) => {
                     tipe = 'Belanja', updated_at = NOW()
                 RETURNING id`,
                 [
-                    finalName, nama_sales || null, merk_unit || null, tipe_unit || null,
+                    finalName, nama_sales || null, cleanMerk, cleanTipe,
                     parsedHarga, parsedQty, tanggal_lahir || null, fullAddress,
                     cleanPhone, metode_pembayaran || null, tahu_dari || null, source, optedIn
                 ]
@@ -129,11 +134,11 @@ exports.submitForm = async (req, res) => {
         const customerId = rows[0].id;
 
         // Record purchase in purchases history table
-        if (parsedHarga || merk_unit || tipe_unit) {
+        if (parsedHarga || cleanMerk || cleanTipe) {
             await db.query(
                 `INSERT INTO purchases (customer_id, merk_unit, tipe_unit, harga, qty, nama_sales, metode_pembayaran, source)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [customerId, merk_unit || null, tipe_unit || null, parsedHarga, parsedQty, nama_sales || null, metode_pembayaran || null, source]
+                [customerId, cleanMerk, cleanTipe, parsedHarga, parsedQty, nama_sales || null, metode_pembayaran || null, source]
             );
         }
 
@@ -181,8 +186,8 @@ exports.submitForm = async (req, res) => {
                     nama_lengkap: finalName,
                     whatsapp: cleanPhone,
                     alamat: fullAddress || null,
-                    merk_unit: merk_unit || null,
-                    tipe_unit: tipe_unit || null,
+                    merk_unit: cleanMerk,
+                    tipe_unit: cleanTipe,
                     metode_pembayaran: metode_pembayaran || null,
                     source,
                     tipe: 'Belanja'

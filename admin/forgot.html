@@ -44,17 +44,22 @@
       const res = await fetch(`${API_URL}/admin/forgot`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernameOrEmail: v }) });
       const data = await res.json();
       if (data.success) {
-        alertEl.textContent = data.message || 'Jika email terdaftar, link reset akan dikirim.';
+        alertEl.textContent = data.message || 'Jika akun ditemukan, link reset dikirim ke email.';
         alertEl.classList.add('success','show');
-        // If token returned (dev fallback), show it so admin can use it
-        if (data.token) {
+        // Dev-only: token returned inline if mail isn't configured
+        if (data._devToken) {
           const pre = document.createElement('pre');
           pre.style.marginTop = '10px';
-          pre.textContent = 'Reset token (dev): ' + data.token + '\nUse this token at /admin/reset.html?token=' + data.token;
+          pre.style.fontSize = '11px';
+          pre.style.background = '#FEF3C7';
+          pre.style.border = '1px solid #FDE68A';
+          pre.style.padding = '8px';
+          pre.style.borderRadius = '6px';
+          pre.textContent = '[DEV] ' + (data._devNote || '') + '\nReset link: /admin/reset.html?token=' + data._devToken;
           alertEl.appendChild(pre);
         }
       } else {
-        alertEl.textContent = data.message || 'Gagal membuat reset token.';
+        alertEl.textContent = data.message || 'Gagal memproses permintaan reset.';
         alertEl.classList.add('error','show');
       }
     });

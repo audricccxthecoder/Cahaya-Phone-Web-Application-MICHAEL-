@@ -68,11 +68,20 @@ router.post('/google/disconnect', authMiddleware, googleController.disconnect);
 // Admin login (rate limited)
 router.post('/admin/login', loginLimiter, adminController.login);
 
-// Admin profile update (edit name)
+// Admin profile update (edit name + email)
 router.patch('/admin/profile', authMiddleware, adminController.updateProfile);
 
 // Admin change credentials (username/password)
 router.patch('/admin/credentials', authMiddleware, adminController.changeCredentials);
+
+// Current admin info (for role-based UI)
+router.get('/admin/me', authMiddleware, adminController.getCurrentAdmin);
+
+// Admin management (owner-only) — max 3 admins
+router.get('/admin/admins', authMiddleware, adminController.listAdmins);
+router.post('/admin/admins', authMiddleware, adminController.createAdmin);
+router.patch('/admin/admins/:id', authMiddleware, adminController.updateAdmin);
+router.delete('/admin/admins/:id', authMiddleware, adminController.deleteAdmin);
 
 // Forgot password / reset (rate limited)
 router.post('/admin/forgot', forgotLimiter, adminController.forgotPassword);

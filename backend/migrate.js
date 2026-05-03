@@ -21,9 +21,20 @@ async function migrate() {
         username VARCHAR(50) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         nama VARCHAR(100) NOT NULL,
-        email VARCHAR(255) DEFAULT NULL,
+        email VARCHAR(255) UNIQUE DEFAULT NULL,
+        role VARCHAR(20) NOT NULL DEFAULT 'staff',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    // Backfill role column for existing installations (idempotent)
+    await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'staff'`);
+    // Ensure UNIQUE on email (skip if already exists)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'admins_email_unique_idx') THEN
+          CREATE UNIQUE INDEX admins_email_unique_idx ON admins (LOWER(email)) WHERE email IS NOT NULL;
+        END IF;
+      END $$;
     `);
     console.log('✅ Table admins created/verified');
 
@@ -394,18 +405,20 @@ async function migrate() {
       const hashedPassword = await bcrypt.hash('admin123', 10);
 
       await client.query(
-        'INSERT INTO admins (username, password, nama, email) VALUES ($1, $2, $3, $4)',
-        ['superadmin', hashedPassword, 'Cahaya Phone Superadmin', 'admin@localhost']
+        `INSERT INTO admins (username, password, nama, email, role)
+         VALUES ($1, $2, $3, $4, 'owner')`,
+        ['superadmin', hashedPassword, 'Cahaya Phone Superadmin', null]
       );
-      console.log('✅ Default admin created');
+      console.log('✅ Default admin created (role: owner, email kosong — set via Settings)');
       console.log('   Username: superadmin');
       console.log('   Password: admin123');
     } else {
-      // Update existing admin username & nama to latest
+      // Update existing admin username & nama to latest, ensure first admin = owner
       await client.query(
-        `UPDATE admins SET username = 'superadmin', nama = 'Cahaya Phone Superadmin' WHERE id = (SELECT id FROM admins ORDER BY id LIMIT 1)`
+        `UPDATE admins SET username = 'superadmin', nama = 'Cahaya Phone Superadmin', role = 'owner'
+         WHERE id = (SELECT id FROM admins ORDER BY id LIMIT 1)`
       );
-      console.log('✅ Admin updated: superadmin / Cahaya Phone Superadmin');
+      console.log('✅ Admin updated: superadmin / Cahaya Phone Superadmin / role=owner');
     }
 
     // Tampilkan ringkasan

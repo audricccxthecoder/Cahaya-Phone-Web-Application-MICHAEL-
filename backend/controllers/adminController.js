@@ -155,12 +155,12 @@ exports.login = async (req, res) => {
         }
 
         const token = jwt.sign(
-            { id: admin.id, username: admin.username },
+            { id: admin.id, username: admin.username, role: admin.role || 'staff' },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
 
-        console.log('✅ Login successful:', username);
+        console.log('✅ Login successful:', username, '| role:', admin.role);
 
         res.json({
             success: true,
@@ -169,7 +169,9 @@ exports.login = async (req, res) => {
             admin: {
                 id: admin.id,
                 username: admin.username,
-                nama: admin.nama
+                nama: admin.nama,
+                email: admin.email,
+                role: admin.role || 'staff'
             }
         });
 
@@ -269,11 +271,28 @@ exports.getStats = async (req, res) => {
  */
 exports.getPipelineMonthly = async (req, res) => {
     try {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1..12
+
+        // Year filter (default = current). Archive years return all 12 months.
+        const reqYear = parseInt(req.query.year, 10);
+        const year = Number.isFinite(reqYear) ? reqYear : currentYear;
+        const isArchive = year < currentYear;
+        const isFuture = year > currentYear;
+
+        // Determine [start, end] month range:
+        //  - Current year: from current month → December
+        //  - Past year (archive): full Jan → December
+        //  - Future year: full Jan → December (rare; for forward planning)
+        const startMonth = (year === currentYear) ? currentMonth : 1;
+        const endMonth = 12;
+
         const { rows } = await db.query(`
             WITH months AS (
                 SELECT generate_series(
-                    DATE_TRUNC('month', NOW()) - INTERVAL '11 months',
-                    DATE_TRUNC('month', NOW()),
+                    make_date($1::int, $2::int, 1),
+                    make_date($1::int, $3::int, 1),
                     INTERVAL '1 month'
                 ) AS month_start
             ),
@@ -285,6 +304,7 @@ exports.getPipelineMonthly = async (req, res) => {
                     COUNT(*) FILTER (WHERE status = 'Inactive') AS lost,
                     COUNT(*) AS total
                 FROM customers
+                WHERE EXTRACT(YEAR FROM created_at) = $1
                 GROUP BY DATE_TRUNC('month', created_at)
             ),
             omz AS (
@@ -292,6 +312,7 @@ exports.getPipelineMonthly = async (req, res) => {
                     DATE_TRUNC('month', created_at) AS month_start,
                     COALESCE(SUM(harga * COALESCE(qty, 1)), 0) AS omzet
                 FROM purchases
+                WHERE EXTRACT(YEAR FROM created_at) = $1
                 GROUP BY DATE_TRUNC('month', created_at)
             )
             SELECT
@@ -305,9 +326,31 @@ exports.getPipelineMonthly = async (req, res) => {
             FROM months m
             LEFT JOIN cust c ON c.month_start = m.month_start
             LEFT JOIN omz o ON o.month_start = m.month_start
-            ORDER BY m.month_start DESC
+            ORDER BY m.month_start ASC
+        `, [year, startMonth, endMonth]);
+
+        // List all years that have data (for year selector)
+        const { rows: yearsRows } = await db.query(`
+            SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int AS year
+            FROM customers
+            WHERE created_at IS NOT NULL
+            ORDER BY year DESC
         `);
-        res.json({ success: true, data: rows });
+        const availableYears = yearsRows.map(r => r.year);
+        if (!availableYears.includes(currentYear)) availableYears.unshift(currentYear);
+
+        res.json({
+            success: true,
+            data: rows,
+            meta: {
+                year,
+                currentYear,
+                currentMonth,
+                isArchive,
+                isFuture,
+                availableYears
+            }
+        });
     } catch (error) {
         console.error('❌ Pipeline monthly error:', error);
         res.status(500).json({ success: false, message: 'Gagal mengambil data pipeline' });
@@ -373,17 +416,9 @@ exports.getCustomerById = async (req, res) => {
             [id]
         );
 
-        // Include chat history (last 50 messages)
-        const { rows: messages } = await db.query(
-            `SELECT id, direction, message, channel, sent_at
-             FROM messages WHERE customer_id = $1
-             ORDER BY sent_at DESC LIMIT 50`,
-            [id]
-        );
-
         res.json({
             success: true,
-            data: { ...customers[0], purchases, purchase_count: purchases.length, messages }
+            data: { ...customers[0], purchases, purchase_count: purchases.length }
         });
 
     } catch (error) {
@@ -483,28 +518,224 @@ exports.getMessages = async (req, res) => {
 };
 
 /**
- * Update admin profile (name)
+ * Update admin profile (name + email)
  * PATCH /api/admin/profile
+ * Body: { nama?: string, email?: string }
  */
 exports.updateProfile = async (req, res) => {
     try {
-        const { nama } = req.body;
+        const { nama, email } = req.body;
         const adminId = req.admin && req.admin.id;
 
         if (!adminId) {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
         }
 
-        if (!nama || String(nama).trim() === '') {
-            return res.status(400).json({ success: false, message: 'Nama tidak boleh kosong' });
+        const updates = [];
+        const params = [];
+        let i = 1;
+
+        if (typeof nama === 'string') {
+            if (!nama.trim()) return res.status(400).json({ success: false, message: 'Nama tidak boleh kosong' });
+            updates.push(`nama = $${i++}`); params.push(nama.trim());
         }
 
-        await db.query('UPDATE admins SET nama = $1 WHERE id = $2', [String(nama).trim(), adminId]);
+        if (typeof email === 'string') {
+            const trimmed = email.trim().toLowerCase();
+            if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+                return res.status(400).json({ success: false, message: 'Format email tidak valid' });
+            }
+            const emailValue = trimmed || null;
 
-        res.json({ success: true, message: 'Profil diperbarui', data: { id: adminId, nama: String(nama).trim() } });
+            if (emailValue) {
+                const { rows: dup } = await db.query(
+                    'SELECT id FROM admins WHERE LOWER(email) = $1 AND id != $2',
+                    [emailValue, adminId]
+                );
+                if (dup.length > 0) {
+                    return res.status(409).json({ success: false, message: 'Email sudah dipakai admin lain' });
+                }
+            }
+            updates.push(`email = $${i++}`); params.push(emailValue);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ success: false, message: 'Tidak ada field untuk diperbarui' });
+        }
+
+        params.push(adminId);
+        await db.query(`UPDATE admins SET ${updates.join(', ')} WHERE id = $${i}`, params);
+
+        const { rows } = await db.query('SELECT id, username, nama, email, role FROM admins WHERE id = $1', [adminId]);
+        res.json({ success: true, message: 'Profil diperbarui', data: rows[0] });
     } catch (error) {
         console.error('❌ Update profile error:', error);
         res.status(500).json({ success: false, message: 'Gagal memperbarui profil' });
+    }
+};
+
+// ============================================
+// ADMIN MANAGEMENT (owner-only, max 3 admins)
+// ============================================
+
+const MAX_ADMINS = 3;
+
+function ownerOnly(req, res) {
+    if (!req.admin || req.admin.role !== 'owner') {
+        res.status(403).json({ success: false, message: 'Hanya owner yang bisa akses' });
+        return false;
+    }
+    return true;
+}
+
+/**
+ * GET /api/admin/admins  — list all admins (owner-only)
+ */
+exports.listAdmins = async (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    try {
+        const { rows } = await db.query(
+            'SELECT id, username, nama, email, role, created_at FROM admins ORDER BY id ASC'
+        );
+        res.json({ success: true, data: rows, max: MAX_ADMINS });
+    } catch (error) {
+        console.error('❌ List admins error:', error);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data admin' });
+    }
+};
+
+/**
+ * POST /api/admin/admins  — create new admin (owner-only)
+ * Body: { username, password, nama, email }
+ */
+exports.createAdmin = async (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    try {
+        const { username, password, nama, email } = req.body || {};
+        if (!username || !password || !nama || !email) {
+            return res.status(400).json({ success: false, message: 'Username, password, nama, email wajib diisi' });
+        }
+        if (String(password).length < 6) {
+            return res.status(400).json({ success: false, message: 'Password minimal 6 karakter' });
+        }
+        const cleanEmail = String(email).trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            return res.status(400).json({ success: false, message: 'Format email tidak valid' });
+        }
+
+        const { rows: count } = await db.query('SELECT COUNT(*)::int AS n FROM admins');
+        if (count[0].n >= MAX_ADMINS) {
+            return res.status(409).json({ success: false, message: `Maksimal ${MAX_ADMINS} admin` });
+        }
+
+        const { rows: dupU } = await db.query('SELECT id FROM admins WHERE username = $1', [String(username).trim()]);
+        if (dupU.length) return res.status(409).json({ success: false, message: 'Username sudah dipakai' });
+
+        const { rows: dupE } = await db.query('SELECT id FROM admins WHERE LOWER(email) = $1', [cleanEmail]);
+        if (dupE.length) return res.status(409).json({ success: false, message: 'Email sudah dipakai' });
+
+        const hashed = await bcrypt.hash(String(password), 10);
+        const { rows } = await db.query(
+            `INSERT INTO admins (username, password, nama, email, role)
+             VALUES ($1, $2, $3, $4, 'staff')
+             RETURNING id, username, nama, email, role, created_at`,
+            [String(username).trim(), hashed, String(nama).trim(), cleanEmail]
+        );
+        res.json({ success: true, message: 'Admin baru ditambahkan', data: rows[0] });
+    } catch (error) {
+        console.error('❌ Create admin error:', error);
+        res.status(500).json({ success: false, message: 'Gagal menambah admin' });
+    }
+};
+
+/**
+ * PATCH /api/admin/admins/:id  — update admin (owner-only)
+ * Body: { nama?, email?, password? }  — owner cannot demote/delete themselves via this route
+ */
+exports.updateAdmin = async (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    try {
+        const targetId = parseInt(req.params.id, 10);
+        const { nama, email, password } = req.body || {};
+
+        const { rows: target } = await db.query('SELECT id, role FROM admins WHERE id = $1', [targetId]);
+        if (target.length === 0) return res.status(404).json({ success: false, message: 'Admin tidak ditemukan' });
+
+        const updates = [];
+        const params = [];
+        let i = 1;
+
+        if (typeof nama === 'string' && nama.trim()) {
+            updates.push(`nama = $${i++}`); params.push(nama.trim());
+        }
+        if (typeof email === 'string') {
+            const cleanEmail = email.trim().toLowerCase();
+            if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+                return res.status(400).json({ success: false, message: 'Format email tidak valid' });
+            }
+            const emailValue = cleanEmail || null;
+            if (emailValue) {
+                const { rows: dup } = await db.query('SELECT id FROM admins WHERE LOWER(email) = $1 AND id != $2', [emailValue, targetId]);
+                if (dup.length) return res.status(409).json({ success: false, message: 'Email sudah dipakai admin lain' });
+            }
+            updates.push(`email = $${i++}`); params.push(emailValue);
+        }
+        if (password) {
+            if (String(password).length < 6) return res.status(400).json({ success: false, message: 'Password minimal 6 karakter' });
+            const hashed = await bcrypt.hash(String(password), 10);
+            updates.push(`password = $${i++}`); params.push(hashed);
+        }
+
+        if (updates.length === 0) return res.status(400).json({ success: false, message: 'Tidak ada perubahan' });
+
+        params.push(targetId);
+        await db.query(`UPDATE admins SET ${updates.join(', ')} WHERE id = $${i}`, params);
+
+        const { rows } = await db.query('SELECT id, username, nama, email, role FROM admins WHERE id = $1', [targetId]);
+        res.json({ success: true, message: 'Admin diperbarui', data: rows[0] });
+    } catch (error) {
+        console.error('❌ Update admin error:', error);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui admin' });
+    }
+};
+
+/**
+ * DELETE /api/admin/admins/:id  — delete admin (owner-only, cannot delete self/owner)
+ */
+exports.deleteAdmin = async (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    try {
+        const targetId = parseInt(req.params.id, 10);
+        if (targetId === req.admin.id) {
+            return res.status(400).json({ success: false, message: 'Tidak bisa menghapus akun sendiri' });
+        }
+        const { rows } = await db.query('SELECT role FROM admins WHERE id = $1', [targetId]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Admin tidak ditemukan' });
+        if (rows[0].role === 'owner') {
+            return res.status(400).json({ success: false, message: 'Tidak bisa menghapus owner' });
+        }
+        await db.query('DELETE FROM admins WHERE id = $1', [targetId]);
+        res.json({ success: true, message: 'Admin dihapus' });
+    } catch (error) {
+        console.error('❌ Delete admin error:', error);
+        res.status(500).json({ success: false, message: 'Gagal menghapus admin' });
+    }
+};
+
+/**
+ * GET /api/admin/me — get current admin info (for showing email banner, role-based UI)
+ */
+exports.getCurrentAdmin = async (req, res) => {
+    try {
+        const { rows } = await db.query(
+            'SELECT id, username, nama, email, role FROM admins WHERE id = $1',
+            [req.admin.id]
+        );
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Admin tidak ditemukan' });
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('❌ Get current admin error:', error);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data admin' });
     }
 };
 
@@ -555,7 +786,7 @@ exports.changeCredentials = async (req, res) => {
         }
 
         const token = jwt.sign(
-            { id: adminId, username: new_username ? String(new_username).trim() : admin.username },
+            { id: adminId, username: new_username ? String(new_username).trim() : admin.username, role: admin.role || 'staff' },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -609,14 +840,28 @@ exports.getMessagesByCustomer = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
     try {
         const { usernameOrEmail } = req.body;
-        if (!usernameOrEmail) return res.status(400).json({ success: false, message: 'username or email is required' });
+        if (!usernameOrEmail) {
+            return res.status(400).json({ success: false, message: 'Username atau email wajib diisi' });
+        }
 
+        const lookup = String(usernameOrEmail).trim();
         const { rows } = await db.query(
-            'SELECT id, username, email, nama FROM admins WHERE username = $1 OR email = $2',
-            [usernameOrEmail, usernameOrEmail]
+            'SELECT id, username, email, nama FROM admins WHERE username = $1 OR LOWER(email) = LOWER($2)',
+            [lookup, lookup]
         );
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Admin not found' });
+        // Generic response (don't leak whether account exists)
+        const genericMsg = 'Jika akun ditemukan & memiliki email terdaftar, link reset akan dikirim ke email tersebut.';
+        if (rows.length === 0) return res.json({ success: true, message: genericMsg });
+
         const admin = rows[0];
+
+        // Strict: admin MUST have email registered
+        if (!admin.email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Akun ini belum mengatur email. Hubungi owner untuk reset password manual.'
+            });
+        }
 
         const crypto = require('crypto');
         const token = crypto.randomBytes(32).toString('hex');
@@ -628,6 +873,8 @@ exports.forgotPassword = async (req, res) => {
         );
 
         const nodemailer = require('nodemailer');
+        const isDev = process.env.NODE_ENV !== 'production';
+
         if (process.env.MAIL_HOST && process.env.MAIL_USER) {
             const transporter = nodemailer.createTransport({
                 host: process.env.MAIL_HOST,
@@ -640,21 +887,35 @@ exports.forgotPassword = async (req, res) => {
             const frontend = process.env.FRONTEND_URL || 'http://localhost:5500';
             const resetLink = `${frontend.replace(/\/$/, '')}/admin/reset.html?token=${token}`;
 
-            await transporter.sendMail({
-                from,
-                to: admin.email || process.env.MAIL_USER,
-                subject: 'Reset password admin - Cahaya Phone',
-                text: `Halo ${admin.nama || admin.username},\n\nGunakan link berikut untuk mereset password Anda (berlaku 1 jam): ${resetLink}`,
-                html: `<p>Halo ${admin.nama || admin.username},</p><p>Klik link berikut untuk reset password (berlaku 1 jam): <a href="${resetLink}">${resetLink}</a></p>`
-            });
-
-            return res.json({ success: true, message: 'Reset link dikirim ke email admin.' });
+            try {
+                await transporter.sendMail({
+                    from,
+                    to: admin.email,  // strictly admin's email — no MAIL_USER fallback
+                    subject: 'Reset Password Admin — Cahaya Phone',
+                    text: `Halo ${admin.nama || admin.username},\n\nGunakan link berikut untuk mereset password Anda (berlaku 1 jam):\n${resetLink}\n\nKalau Anda tidak meminta reset, abaikan email ini.`,
+                    html: `<p>Halo <strong>${admin.nama || admin.username}</strong>,</p>
+                           <p>Klik link berikut untuk reset password (berlaku 1 jam):</p>
+                           <p><a href="${resetLink}">${resetLink}</a></p>
+                           <p style="color:#888;font-size:12px;">Kalau Anda tidak meminta reset, abaikan email ini.</p>`
+                });
+                return res.json({ success: true, message: genericMsg });
+            } catch (mailErr) {
+                console.error('❌ Mail send failed:', mailErr.message || mailErr);
+                if (isDev) {
+                    return res.json({ success: true, message: genericMsg, _devToken: token, _devNote: 'Mail gagal — token dev fallback' });
+                }
+                return res.status(500).json({ success: false, message: 'Gagal mengirim email reset. Hubungi owner.' });
+            }
         }
 
-        return res.json({ success: true, message: 'Reset token created (no mail configured)', token });
+        // No mail configured
+        if (isDev) {
+            return res.json({ success: true, message: genericMsg, _devToken: token, _devNote: 'MAIL belum dikonfigurasi — token dev fallback' });
+        }
+        return res.status(500).json({ success: false, message: 'Email server belum dikonfigurasi. Hubungi owner.' });
     } catch (error) {
         console.error('❌ Forgot password error:', error);
-        res.status(500).json({ success: false, message: 'Gagal membuat reset token' });
+        res.status(500).json({ success: false, message: 'Gagal memproses permintaan reset' });
     }
 };
 
@@ -1258,7 +1519,8 @@ exports.getTopProducts = async (req, res) => {
                    SUM(qty) as total_qty,
                    COALESCE(SUM(harga * qty), 0) as total_revenue
             FROM purchases
-            WHERE merk_unit IS NOT NULL AND merk_unit != ''
+            WHERE merk_unit IN ('iPhone','Samsung','Xiaomi','Oppo','Tecno','Realme','Infinix','Nokia')
+              AND tipe_unit IS NOT NULL AND tipe_unit != ''
             GROUP BY merk_unit, tipe_unit
             ORDER BY total_sold DESC
             LIMIT 20
@@ -1282,7 +1544,7 @@ exports.getTopBrands = async (req, res) => {
                    SUM(qty) as total_qty,
                    COALESCE(SUM(harga * qty), 0) as total_revenue
             FROM purchases
-            WHERE merk_unit IS NOT NULL AND merk_unit != ''
+            WHERE merk_unit IN ('iPhone','Samsung','Xiaomi','Oppo','Tecno','Realme','Infinix','Nokia')
             GROUP BY merk_unit
             ORDER BY total_sold DESC
         `);
